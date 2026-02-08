@@ -72,7 +72,7 @@ async def generated_response(runner, user_id, session_id, prompt):
     import asyncio
     max_retries = 5
     retry_delay = 15  # Start with 15 seconds
-    
+
     for attempt in range(max_retries):
         try:
             response = None
@@ -81,8 +81,14 @@ async def generated_response(runner, user_id, session_id, prompt):
                         session_id=session_id,
                         new_message=prompt,
                     ):
-                        if event.is_final_response():
+                        if event.is_final_response() and event.content and event.content.parts:
                             response = event.content.parts[0].text
+                            break
+            if response is None:
+                raise ValueError(
+                    "AI did not return a response. Check that GROQ_API_KEY or GEMINI_API_KEY is set in .env "
+                    "and that the model (e.g. gemini/gemini-1.5-pro-latest) is valid."
+                )
             return response
         except Exception as e:
             if "rate_limit" in str(e).lower() or "429" in str(e):
@@ -198,37 +204,60 @@ def sanitize_mermaid_output(text: str) -> str | None:
 
 
 
+def _default_interface_section(title: str) -> dict:
+    """Return a minimal valid interface section when AI output is missing."""
+    return {
+        "title": title,
+        "description": "No interface defined.",
+        "interface_diagram": {
+            "diagram_type": "mermaid",
+            "code": "flowchart LR\n    N/A[No Interface Defined]"
+        }
+    }
+
+
 def clean_interface_diagrams(external_interfaces: dict) -> dict:
     """
     Iterates through the external_interfaces dictionary, cleans the mermaid code 
     for each interface type, and returns the updated dictionary.
+    Always returns a dict with all four interface keys (uses defaults if missing).
     """
-    # Define the keys to check within the dictionary
     interface_keys = [
         "user_interfaces",
         "hardware_interfaces",
         "software_interfaces",
         "communication_interfaces"
     ]
+    default_titles = {
+        "user_interfaces": "User Interfaces",
+        "hardware_interfaces": "Hardware Interfaces",
+        "software_interfaces": "Software Interfaces",
+        "communication_interfaces": "Communication Interfaces",
+    }
+
+    if not isinstance(external_interfaces, dict):
+        external_interfaces = {}
 
     for key in interface_keys:
-        # Check if the key and the nested path exist to avoid KeyErrors
         try:
-            raw_code = external_interfaces[key]["interface_diagram"]["code"]
-            
-            # Use your existing sanitize function
+            section = external_interfaces.get(key)
+            if not section or not isinstance(section, dict):
+                external_interfaces[key] = _default_interface_section(default_titles[key])
+                continue
+            inner = section.get("interface_diagram") if isinstance(section.get("interface_diagram"), dict) else None
+            if not inner or "code" not in inner:
+                external_interfaces[key] = _default_interface_section(
+                    section.get("title", default_titles[key])
+                )
+                continue
+            raw_code = inner["code"]
             cleaned_code = sanitize_mermaid_output(raw_code)
-            
             if cleaned_code:
-                # Store the cleaned code back into the dictionary
                 external_interfaces[key]["interface_diagram"]["code"] = cleaned_code
             else:
-                # Optional: Provide a minimal valid fallback if sanitization returns None
                 external_interfaces[key]["interface_diagram"]["code"] = "flowchart LR\n    N/A[No Interface Defined]"
-        
         except (KeyError, TypeError):
-            # Skip if the specific interface section is missing from the input
-            continue
+            external_interfaces[key] = _default_interface_section(default_titles[key])
 
     return external_interfaces
 
@@ -236,11 +265,13 @@ def clean_interface_diagrams(external_interfaces: dict) -> dict:
 def render_mermaid_png(mermaid_code: str, output_png: Path):
     """
     Renders Mermaid code into a PNG file using mmdc (npm).
+    Uses PATH first so it works on any machine; no hardcoded paths.
     """
-    # Check if mmdc is available
-    if not shutil.which("mmdc"):
+    mmdc_path = shutil.which("mmdc") or shutil.which("mmdc.cmd")
+    if not mmdc_path:
         raise FileNotFoundError(
-            "mmdc command not found. Please install it using: npm install -g @mermaid-js/mermaid-cli"
+            "mmdc command not found. Install it with: npm install -g @mermaid-js/mermaid-cli\n"
+            "Then ensure npm global bin is in your PATH (e.g. on Windows: %%APPDATA%%\\npm)."
         )
     
     output_png.parent.mkdir(parents=True, exist_ok=True)
@@ -252,7 +283,7 @@ def render_mermaid_png(mermaid_code: str, output_png: Path):
     css_path = Path("srs_engine/static/custom-diagram.css")
 
     cmd = [
-        "C:\\Users\\ASUS\\AppData\\Roaming\\npm\\mmdc.cmd",
+        mmdc_path,
         "-i", str(mmd_path),
         "-o", str(output_png),
         "-w", "2400",
@@ -268,4 +299,5 @@ def render_mermaid_png(mermaid_code: str, output_png: Path):
         print(f"✅ Mermaid diagram saved: {output_png}")
     except subprocess.CalledProcessError as e:
         print(f"❌ mmdc error: {e.stderr}")
+        print(f"Command that failed: {' '.join(cmd)}")
         raise

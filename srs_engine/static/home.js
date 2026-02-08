@@ -174,7 +174,14 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!response.ok) {
                 const errorText = await response.text();
                 console.error("Server error:", errorText);
-                throw new Error(`Server returned ${response.status}: ${errorText}`);
+                let message = `Server returned ${response.status}`;
+                try {
+                    const errJson = JSON.parse(errorText);
+                    if (errJson.message) message = errJson.message;
+                } catch (_) {
+                    if (errorText) message = errorText;
+                }
+                throw new Error(message);
             }
 
             const result = await response.json();

@@ -11,3 +11,4 @@ jinja2
 python-multipart
 docx2pdf
 requests
+python-dotenv
