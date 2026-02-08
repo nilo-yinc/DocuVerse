@@ -29,6 +29,7 @@ from datetime import datetime
 from srs_engine.utils.srs_document_generator import generate_srs_document
 from srs_engine.utils.model import API_KEY_CONFIGURED
 from srs_engine.utils.fallback_srs import build_minimal_sections
+from srs_engine.utils.srs_diagrams import get_all_srs_diagrams
 
 today = datetime.today().strftime("%m/%d/%Y")
 
@@ -126,18 +127,20 @@ def _generate_doc_from_sections(
     nfr_section: dict,
     glossary_section: dict,
     assumptions_section: dict,
+    image_paths: dict = None,
 ) -> str:
-    """Build image_paths and call generate_srs_document. Returns path to .docx."""
+    """Build image_paths (if not provided) and call generate_srs_document. Returns path to .docx."""
     project_name = inputs["project_identity"]["project_name"]
     author_list = inputs["project_identity"]["author"]
     organization_name = inputs["project_identity"]["organization"]
     output_path = f"./srs_engine/generated_srs/{project_name}_SRS.docx"
-    image_paths = {
-        "user_interfaces": Path(f"./srs_engine/static/{project_name}_user_interfaces_diagram.png"),
-        "hardware_interfaces": Path(f"./srs_engine/static/{project_name}_hardware_interfaces_diagram.png"),
-        "software_interfaces": Path(f"./srs_engine/static/{project_name}_software_interfaces_diagram.png"),
-        "communication_interfaces": Path(f"./srs_engine/static/{project_name}_communication_interfaces_diagram.png"),
-    }
+    if image_paths is None:
+        image_paths = {
+            "user_interfaces": Path(f"./srs_engine/static/{project_name}_user_interfaces_diagram.png"),
+            "hardware_interfaces": Path(f"./srs_engine/static/{project_name}_hardware_interfaces_diagram.png"),
+            "software_interfaces": Path(f"./srs_engine/static/{project_name}_software_interfaces_diagram.png"),
+            "communication_interfaces": Path(f"./srs_engine/static/{project_name}_communication_interfaces_diagram.png"),
+        }
     return generate_srs_document(
         project_name=project_name,
         introduction_section=introduction_section,
@@ -194,19 +197,30 @@ async def generate_srs(srs_data: SRSRequest):
             assumptions_section = clean_and_parse_json(session.state.get("assumptions_section", {})) or {}
 
             text_only = os.getenv("TEXT_ONLY", "0").strip().lower() in ("1", "true", "yes")
+            image_paths = {
+                "user_interfaces": Path(f"./srs_engine/static/{project_name}_user_interfaces_diagram.png"),
+                "hardware_interfaces": Path(f"./srs_engine/static/{project_name}_hardware_interfaces_diagram.png"),
+                "software_interfaces": Path(f"./srs_engine/static/{project_name}_software_interfaces_diagram.png"),
+                "communication_interfaces": Path(f"./srs_engine/static/{project_name}_communication_interfaces_diagram.png"),
+                "system_context": Path(f"./srs_engine/static/{project_name}_system_context.png"),
+                "system_architecture": Path(f"./srs_engine/static/{project_name}_system_architecture.png"),
+                "use_case": Path(f"./srs_engine/static/{project_name}_use_case.png"),
+                "user_workflow": Path(f"./srs_engine/static/{project_name}_user_workflow.png"),
+                "security_flow": Path(f"./srs_engine/static/{project_name}_security_flow.png"),
+                "data_erd": Path(f"./srs_engine/static/{project_name}_data_erd.png"),
+            }
             if not text_only:
-                image_paths = {
-                    "user_interfaces": Path(f"./srs_engine/static/{project_name}_user_interfaces_diagram.png"),
-                    "hardware_interfaces": Path(f"./srs_engine/static/{project_name}_hardware_interfaces_diagram.png"),
-                    "software_interfaces": Path(f"./srs_engine/static/{project_name}_software_interfaces_diagram.png"),
-                    "communication_interfaces": Path(f"./srs_engine/static/{project_name}_communication_interfaces_diagram.png"),
-                }
                 for key in ("user_interfaces", "hardware_interfaces", "software_interfaces", "communication_interfaces"):
                     try:
                         code = external_interfaces_section[key]["interface_diagram"]["code"]
                         render_mermaid_png(code, image_paths[key])
                     except Exception as diagram_err:
                         print(f"⚠️ Diagram {key}: {diagram_err}")
+                for name, code in get_all_srs_diagrams(inputs).items():
+                    try:
+                        render_mermaid_png(code, image_paths[name])
+                    except Exception as diagram_err:
+                        print(f"⚠️ SRS diagram {name}: {diagram_err}")
 
             generated_path = _generate_doc_from_sections(
                 inputs,
@@ -217,6 +231,7 @@ async def generate_srs(srs_data: SRSRequest):
                 nfr_section,
                 glossary_section,
                 assumptions_section,
+                image_paths=image_paths,
             )
             print(f"✅ SRS document generated (AI): {generated_path}")
             return {
@@ -234,19 +249,30 @@ async def generate_srs(srs_data: SRSRequest):
     minimal = build_minimal_sections(inputs)
     external_interfaces_section = clean_interface_diagrams(minimal["external_interfaces_section"])
     text_only = os.getenv("TEXT_ONLY", "0").strip().lower() in ("1", "true", "yes")
+    image_paths = {
+        "user_interfaces": Path(f"./srs_engine/static/{project_name}_user_interfaces_diagram.png"),
+        "hardware_interfaces": Path(f"./srs_engine/static/{project_name}_hardware_interfaces_diagram.png"),
+        "software_interfaces": Path(f"./srs_engine/static/{project_name}_software_interfaces_diagram.png"),
+        "communication_interfaces": Path(f"./srs_engine/static/{project_name}_communication_interfaces_diagram.png"),
+        "system_context": Path(f"./srs_engine/static/{project_name}_system_context.png"),
+        "system_architecture": Path(f"./srs_engine/static/{project_name}_system_architecture.png"),
+        "use_case": Path(f"./srs_engine/static/{project_name}_use_case.png"),
+        "user_workflow": Path(f"./srs_engine/static/{project_name}_user_workflow.png"),
+        "security_flow": Path(f"./srs_engine/static/{project_name}_security_flow.png"),
+        "data_erd": Path(f"./srs_engine/static/{project_name}_data_erd.png"),
+    }
     if not text_only:
-        image_paths = {
-            "user_interfaces": Path(f"./srs_engine/static/{project_name}_user_interfaces_diagram.png"),
-            "hardware_interfaces": Path(f"./srs_engine/static/{project_name}_hardware_interfaces_diagram.png"),
-            "software_interfaces": Path(f"./srs_engine/static/{project_name}_software_interfaces_diagram.png"),
-            "communication_interfaces": Path(f"./srs_engine/static/{project_name}_communication_interfaces_diagram.png"),
-        }
         for key in ("user_interfaces", "hardware_interfaces", "software_interfaces", "communication_interfaces"):
             try:
                 code = external_interfaces_section[key]["interface_diagram"]["code"]
                 render_mermaid_png(code, image_paths[key])
             except Exception as diagram_err:
                 print(f"⚠️ Diagram {key} (fallback): {diagram_err}")
+        for name, code in get_all_srs_diagrams(inputs).items():
+            try:
+                render_mermaid_png(code, image_paths[name])
+            except Exception as diagram_err:
+                print(f"⚠️ SRS diagram {name} (fallback): {diagram_err}")
     generated_path = _generate_doc_from_sections(
         inputs,
         minimal["introduction_section"],
@@ -256,6 +282,7 @@ async def generate_srs(srs_data: SRSRequest):
         minimal["nfr_section"],
         minimal["glossary_section"],
         minimal["assumptions_section"],
+        image_paths=image_paths,
     )
     print(f"✅ SRS document generated: {generated_path}")
     return {
