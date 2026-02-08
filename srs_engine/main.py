@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from google.adk.sessions import InMemorySessionService
@@ -23,10 +23,12 @@ from srs_engine.utils.globals import (
     render_mermaid_png)
 from google.adk.agents import SequentialAgent , ParallelAgent
 from pathlib import Path
+import os
 import time
 from datetime import datetime
 from srs_engine.utils.srs_document_generator import generate_srs_document
-from srs_engine.utils.model import GROQ_API_KEY
+from srs_engine.utils.model import API_KEY_CONFIGURED
+from srs_engine.utils.fallback_srs import build_minimal_sections
 
 today = datetime.today().strftime("%m/%d/%Y")
 
@@ -99,164 +101,169 @@ async def root(request: Request):
     )
 
 
+@app.get("/download_srs/{filename}")
+async def download_srs(filename: str):
+    """Serve the generated SRS .docx for download. Filename e.g. ProjectName_SRS.docx."""
+    if not filename.endswith(".docx") or ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    base = Path("./srs_engine/generated_srs").resolve()
+    path = (base / filename).resolve()
+    if not path.is_file() or base not in path.parents:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return FileResponse(path, filename=filename, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+
+
+def _ensure_output_dir():
+    Path("./srs_engine/generated_srs").mkdir(exist_ok=True)
+
+
+def _generate_doc_from_sections(
+    inputs: dict,
+    introduction_section: dict,
+    overall_description_section: dict,
+    system_features_section: dict,
+    external_interfaces_section: dict,
+    nfr_section: dict,
+    glossary_section: dict,
+    assumptions_section: dict,
+) -> str:
+    """Build image_paths and call generate_srs_document. Returns path to .docx."""
+    project_name = inputs["project_identity"]["project_name"]
+    author_list = inputs["project_identity"]["author"]
+    organization_name = inputs["project_identity"]["organization"]
+    output_path = f"./srs_engine/generated_srs/{project_name}_SRS.docx"
+    image_paths = {
+        "user_interfaces": Path(f"./srs_engine/static/{project_name}_user_interfaces_diagram.png"),
+        "hardware_interfaces": Path(f"./srs_engine/static/{project_name}_hardware_interfaces_diagram.png"),
+        "software_interfaces": Path(f"./srs_engine/static/{project_name}_software_interfaces_diagram.png"),
+        "communication_interfaces": Path(f"./srs_engine/static/{project_name}_communication_interfaces_diagram.png"),
+    }
+    return generate_srs_document(
+        project_name=project_name,
+        introduction_section=introduction_section,
+        overall_description_section=overall_description_section,
+        system_features_section=system_features_section,
+        external_interfaces_section=external_interfaces_section,
+        nfr_section=nfr_section,
+        glossary_section=glossary_section,
+        assumptions_section=assumptions_section,
+        image_paths=image_paths,
+        output_path=output_path,
+        authors=author_list,
+        organization=organization_name,
+    )
+
+
 @app.post("/generate_srs")
 async def generate_srs(srs_data: SRSRequest):
-    try:
-        if not GROQ_API_KEY:
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "status": "error",
-                    "message": "API key not configured. Add GROQ_API_KEY or GEMINI_API_KEY to your .env file (copy from .env.example).",
-                    "error_type": "ConfigurationError"
-                }
+    inputs = srs_data.dict()
+    project_name = inputs["project_identity"]["project_name"]
+    author_list = inputs["project_identity"]["author"]
+    organization_name = inputs["project_identity"]["organization"]
+    _ensure_output_dir()
+
+    # Try full AI path when API key is set
+    if API_KEY_CONFIGURED:
+        try:
+            print("Received SRS Data (AI path): ", project_name)
+            session_id = str(uuid.uuid4())
+            user_id = "test"
+            initial_state = {"user_inputs": inputs}
+            await create_session(session_service_stateful, project_name, user_id, session_id, initial_state)
+
+            first_agent, second_agent = await create_srs_agent()
+            runner = await create_runner(first_agent, project_name, session_service_stateful)
+            prompt = await create_prompt()
+
+            await generated_response(runner, user_id, session_id, prompt)
+            session = await get_session(session_service_stateful, project_name, user_id, session_id)
+            time.sleep(2)
+
+            second_runner = await create_runner(second_agent, project_name, session_service_stateful)
+            await generated_response(second_runner, user_id, session_id, prompt)
+            session = await get_session(session_service_stateful, project_name, user_id, session_id)
+
+            introduction_section = clean_and_parse_json(session.state.get("introduction_section", {})) or {}
+            overall_description_section = clean_and_parse_json(session.state.get("overall_description_section", {})) or {}
+            system_features_section = clean_and_parse_json(session.state.get("system_features_section", {})) or {}
+            external_interfaces_section = clean_interface_diagrams(
+                clean_and_parse_json(session.state.get("external_interfaces_section", {})) or {}
             )
-        print("Received SRS Data: ", srs_data)
-        session_id = str(uuid.uuid4())
+            nfr_section = clean_and_parse_json(session.state.get("nfr_section", {})) or {}
+            glossary_section = clean_and_parse_json(session.state.get("glossary_section", {})) or {}
+            assumptions_section = clean_and_parse_json(session.state.get("assumptions_section", {})) or {}
 
-        inputs = srs_data.dict()
-        project_name = inputs["project_identity"]["project_name"] # will be used later
-        author_list = inputs["project_identity"]["author"] # will be used later
-        organization_name = inputs["project_identity"]["organization"] # will be used later
-        # model_provider = inputs["model_indentity"]["model_provider"]
-        # model_api_key = inputs["model_indentity"]["model_api_key"]
-        # model_name = inputs["model_indentity"]["model_name"]
-        
+            text_only = os.getenv("TEXT_ONLY", "0").strip().lower() in ("1", "true", "yes")
+            if not text_only:
+                image_paths = {
+                    "user_interfaces": Path(f"./srs_engine/static/{project_name}_user_interfaces_diagram.png"),
+                    "hardware_interfaces": Path(f"./srs_engine/static/{project_name}_hardware_interfaces_diagram.png"),
+                    "software_interfaces": Path(f"./srs_engine/static/{project_name}_software_interfaces_diagram.png"),
+                    "communication_interfaces": Path(f"./srs_engine/static/{project_name}_communication_interfaces_diagram.png"),
+                }
+                for key in ("user_interfaces", "hardware_interfaces", "software_interfaces", "communication_interfaces"):
+                    try:
+                        code = external_interfaces_section[key]["interface_diagram"]["code"]
+                        render_mermaid_png(code, image_paths[key])
+                    except Exception as diagram_err:
+                        print(f"⚠️ Diagram {key}: {diagram_err}")
 
-        user_id = "test"  # In real scenarios, fetch from auth system
+            generated_path = _generate_doc_from_sections(
+                inputs,
+                introduction_section,
+                overall_description_section,
+                system_features_section,
+                external_interfaces_section,
+                nfr_section,
+                glossary_section,
+                assumptions_section,
+            )
+            print(f"✅ SRS document generated (AI): {generated_path}")
+            return {
+                "status": "success",
+                "message": "SRS document generated successfully",
+                "srs_document_path": generated_path,
+                "download_url": f"/download_srs/{Path(generated_path).name}",
+            }
+        except Exception as e:
+            import traceback
+            print(f"⚠️ AI path failed, using form-based fallback: {e}")
+            print(traceback.format_exc())
 
-        initial_state = { "user_inputs": inputs }
-
-        print(f'''Project Name: {project_name}''')
-        print(f'''Authors: {author_list}''')
-        print(f'''Organization: {organization_name}''')
-        print(f'Initial state: {initial_state}')
-
-        await create_session(session_service_stateful, project_name, user_id, session_id , initial_state)
-
-
-        print("Session created with ID: ", session_id)
-
-        first_agent , second_agent  = await create_srs_agent()
-        runner = await create_runner(first_agent, project_name, session_service_stateful)
-
-        print("Runner created for agent ")
-        prompt = await create_prompt()
-
-        print("Prompt created for agent ")
-
-        response = await generated_response(runner , user_id , session_id , prompt)
-
-        print("Response generated by agent ")
-
-        session = await get_session(session_service_stateful,project_name , user_id , session_id)
-
-        print("Session state after agent run: ", session.state)
-
-        
-        time.sleep(2)  # Minimal delay with Gemini Pro
-
-
-        second_runner = await create_runner(second_agent, project_name, session_service_stateful)   
-        
-        print(f"Second Runner created for agent ")
-
-        second_response = await generated_response(second_runner , user_id , session_id , prompt)
-
-        print("Response generated by second agent ")
-
-        session = await get_session(session_service_stateful,project_name , user_id , session_id)
-
-        print("Session state after second agent run: ", session.state)
-        
-
-        introduction_section = clean_and_parse_json(session.state.get("introduction_section", {})) or {}
-        print("Introduction Section: ", introduction_section)
-        overall_description_section = clean_and_parse_json(session.state.get("overall_description_section", {})) or {}
-        print("Overall Description Section: ", overall_description_section)
-        system_features_section = clean_and_parse_json(session.state.get("system_features_section", {})) or {}
-        print("System Features Section: ", system_features_section)
-        external_interfaces_section = clean_interface_diagrams(clean_and_parse_json(session.state.get("external_interfaces_section", {})) or {})
-        print("External Interfaces Section: ", external_interfaces_section)
-
-
+    # Fallback: generate from form data only (no AI). Always works.
+    minimal = build_minimal_sections(inputs)
+    external_interfaces_section = clean_interface_diagrams(minimal["external_interfaces_section"])
+    text_only = os.getenv("TEXT_ONLY", "0").strip().lower() in ("1", "true", "yes")
+    if not text_only:
         image_paths = {
-        'user_interfaces': Path(f'./srs_engine/static/{project_name}_user_interfaces_diagram.png'),
-        'hardware_interfaces': Path(f'./srs_engine/static/{project_name}_hardware_interfaces_diagram.png'),
-        'software_interfaces': Path(f'./srs_engine/static/{project_name}_software_interfaces_diagram.png'),
-        'communication_interfaces': Path(f'./srs_engine/static/{project_name}_communication_interfaces_diagram.png')
-    }
-
-
+            "user_interfaces": Path(f"./srs_engine/static/{project_name}_user_interfaces_diagram.png"),
+            "hardware_interfaces": Path(f"./srs_engine/static/{project_name}_hardware_interfaces_diagram.png"),
+            "software_interfaces": Path(f"./srs_engine/static/{project_name}_software_interfaces_diagram.png"),
+            "communication_interfaces": Path(f"./srs_engine/static/{project_name}_communication_interfaces_diagram.png"),
+        }
         for key in ("user_interfaces", "hardware_interfaces", "software_interfaces", "communication_interfaces"):
             try:
                 code = external_interfaces_section[key]["interface_diagram"]["code"]
                 render_mermaid_png(code, image_paths[key])
-            except FileNotFoundError as fnf:
-                print(f"⚠️ Skipping diagram {key}: {fnf}")
             except Exception as diagram_err:
-                print(f"⚠️ Diagram render failed for {key}: {diagram_err}")
-
-
-
-
-        nfr_section = clean_and_parse_json(session.state.get("nfr_section", {})) or {}
-        print("Non-Functional Requirements Section: ", nfr_section)
-
-
-        glossary_section = clean_and_parse_json(session.state.get("glossary_section", {})) or {}
-        print("Glossary Section: ", glossary_section)
-
-
-        assumptions_section = clean_and_parse_json(session.state.get("assumptions_section", {})) or {}
-        print("Assumptions Section: ", assumptions_section)
-
-
-        ## SRS Making ##
-        output_path = f"./srs_engine/generated_srs/{project_name}_SRS.docx"
-
-        Path("./srs_engine/generated_srs").mkdir(exist_ok=True)
-
-        generated_path = generate_srs_document(
-            project_name=project_name,
-            introduction_section=introduction_section,
-            overall_description_section=overall_description_section,
-            system_features_section=system_features_section,
-            external_interfaces_section=external_interfaces_section,
-            nfr_section=nfr_section,
-            glossary_section=glossary_section,
-            assumptions_section=assumptions_section,
-            image_paths=image_paths,
-            output_path=output_path,
-            authors=author_list , # List of authors
-            organization=organization_name
-        )
-
-        print(f"✅ SRS document generated successfully: {generated_path}")
-
-
-
-
-        return {
-            "status": "success",
-            "message": "SRS document generated successfully",
-            "srs_document_path": generated_path
-        }
-    
-    except Exception as e:
-        import traceback
-        error_details = traceback.format_exc()
-        print(f"❌ Error generating SRS: {str(e)}")
-        print(f"Traceback: {error_details}")
-        
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "error",
-                "message": f"Failed to generate SRS: {str(e)}",
-                "error_type": type(e).__name__
-            }
-        )
+                print(f"⚠️ Diagram {key} (fallback): {diagram_err}")
+    generated_path = _generate_doc_from_sections(
+        inputs,
+        minimal["introduction_section"],
+        minimal["overall_description_section"],
+        minimal["system_features_section"],
+        external_interfaces_section,
+        minimal["nfr_section"],
+        minimal["glossary_section"],
+        minimal["assumptions_section"],
+    )
+    print(f"✅ SRS document generated: {generated_path}")
+    return {
+        "status": "success",
+        "message": "SRS document generated successfully",
+        "srs_document_path": generated_path,
+        "download_url": f"/download_srs/{Path(generated_path).name}",
+    }
 
 
 
