@@ -10,8 +10,17 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "autoprefixer": "^10.4.24",
+    "axios": "^1.13.5",
+    "docx": "^9.5.1",
+    "file-saver": "^2.0.5",
+    "framer-motion": "^12.33.0",
+    "lucide-react": "^0.563.0",
+    "postcss": "^8.5.6",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^7.13.0",
+    "tailwindcss": "^4.1.18"
   },
   "devDependencies": {
     "@types/react": "^18.2.55",
