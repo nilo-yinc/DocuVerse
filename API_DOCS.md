@@ -1,4 +1,4 @@
-# AutoSRS - API Documentation
+Invoke-WebRequest https://loca.lt/mytunnelpassword | Select-Object -ExpandProperty Content# AutoSRS - API Documentation
 
 ## Overview
 
