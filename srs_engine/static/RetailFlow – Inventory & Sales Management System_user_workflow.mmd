@@ -1,0 +1,8 @@
+flowchart LR
+    A([User logs in]) --> B{Valid?}
+    B -->|Yes| C[Access dashboard]
+    B -->|No| A
+    C --> D[Perform actions]
+    D --> E[System processes]
+    E --> F[View results]
+    F --> D
