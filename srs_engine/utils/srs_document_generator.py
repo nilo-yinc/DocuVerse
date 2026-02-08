@@ -374,10 +374,10 @@ class SRSDocumentGenerator:
         self.doc.add_paragraph(perspective.get('description', ''))
         path = self.image_paths.get('system_context')
         if path and Path(path).exists():
-            self.doc.add_paragraph("The System Context Diagram illustrating interactions between the system and external entities has been added above.", style='Heading 3')
             self.doc.add_picture(str(path), width=Inches(5.5))
             last_paragraph = self.doc.paragraphs[-1]
             last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            self.doc.add_paragraph("The System Context Diagram illustrating interactions between the system and external entities has been included above.", style='Heading 3')
         else:
             self.doc.add_paragraph("Note: The System Context Diagram illustrating interactions between the system and external entities can be added above.", style='Heading 3')
         
@@ -436,20 +436,37 @@ class SRSDocumentGenerator:
             for dependency in dependency_list:
                 self.doc.add_paragraph(dependency, style='List Bullet')
     
+    def add_system_architecture_section(self, desc_data: Dict[str, Any] = None):
+        """Section 3: System Architecture with architecture diagram."""
+        self.doc.add_heading('3. System Architecture', level=1)
+        self.doc.add_paragraph(
+            "The system follows a layered architecture consisting of: Presentation Layer (Web UI), "
+            "Application Layer (Backend services), Data Layer (Database), and External Integration Layer (APIs, third-party services)."
+        )
+        path = self.image_paths.get('system_architecture')
+        if path and Path(path).exists():
+            self.doc.add_picture(str(path), width=Inches(5.5))
+            last_paragraph = self.doc.paragraphs[-1]
+            last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            self.doc.add_paragraph("The System Architecture Diagram showing component interactions has been included above.", style='Heading 3')
+        else:
+            self.doc.add_paragraph("Note: The System Architecture Diagram can be included above.", style='Heading 3')
+    
     def add_system_features_section(self, features_data: Dict[str, Any]):
         """
-        Add System Features section to the document.
-        
-        Args:
-            features_data: Dictionary containing system features section data
+        Add Functional Requirements section (4) with Use Case diagram.
         """
-        # Section title
-        self.doc.add_heading(f"3. {features_data.get('title', 'System Features')}", level=1)
-        
+        self.doc.add_heading('4. Functional Requirements', level=1)
+        path = self.image_paths.get('use_case')
+        if path and Path(path).exists():
+            self.doc.add_picture(str(path), width=Inches(5.5))
+            last_paragraph = self.doc.paragraphs[-1]
+            last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            self.doc.add_paragraph("The Use Case Diagram representing functional interactions between users and the system has been added above.", style='Heading 3')
         features = features_data.get('features', [])
         for idx, feature in enumerate(features, 1):
             feature_name = feature.get('feature_name', f'Feature {idx}')
-            self.doc.add_heading(f"3.{idx} {feature_name}", level=2)
+            self.doc.add_heading(f"4.{idx} {feature_name}", level=2)
             
             # Description
             description = feature.get('description', '')
@@ -478,6 +495,22 @@ class SRSDocumentGenerator:
                     req_desc = req.get('description', '')
                     self.doc.add_paragraph(req_desc, style='List Bullet')
     
+    def add_user_workflow_section(self):
+        """Section 5: User Workflow with workflow diagram."""
+        self.doc.add_heading('5. User Workflow', level=1)
+        self.doc.add_paragraph(
+            "The typical user workflow includes: User logs into the system; System validates credentials; "
+            "User accesses role-based dashboard; User performs permitted actions; System processes and stores data; User views results or reports."
+        )
+        path = self.image_paths.get('user_workflow')
+        if path and Path(path).exists():
+            self.doc.add_picture(str(path), width=Inches(5.5))
+            last_paragraph = self.doc.paragraphs[-1]
+            last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            self.doc.add_paragraph("The User Flow / Workflow Diagram illustrating these steps has been included above.", style='Heading 3')
+        else:
+            self.doc.add_paragraph("Note: The User Flow / Workflow Diagram can be included above.", style='Heading 3')
+    
     def add_external_interfaces_section(
         self, 
         interfaces_data: Dict[str, Any],
@@ -491,11 +524,11 @@ class SRSDocumentGenerator:
             image_paths: Dictionary with paths to interface diagrams
         """
         # Section title
-        self.doc.add_heading(interfaces_data.get('title', '4. External Interface Requirements'), level=1)
+        self.doc.add_heading('9. External Interface Requirements', level=1)
         
-        # 4.1 User Interfaces
+        # 9.1 User Interfaces
         user_interfaces = interfaces_data.get('user_interfaces', {})
-        self.doc.add_heading(user_interfaces.get('title', '4.1 User Interfaces'), level=2)
+        self.doc.add_heading(user_interfaces.get('title', '9.1 User Interface'), level=2)
         self.doc.add_paragraph(user_interfaces.get('description', ''))
         
         # Add user interface diagram
@@ -505,9 +538,9 @@ class SRSDocumentGenerator:
             last_paragraph = self.doc.paragraphs[-1]
             last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
         
-        # 4.2 Hardware Interfaces
+        # 9.2 Hardware / Software / Communication (grouped)
         hardware_interfaces = interfaces_data.get('hardware_interfaces', {})
-        self.doc.add_heading(hardware_interfaces.get('title', '4.2 Hardware Interfaces'), level=2)
+        self.doc.add_heading(hardware_interfaces.get('title', '9.2 Application Programming Interfaces (APIs)'), level=2)
         self.doc.add_paragraph(hardware_interfaces.get('description', ''))
         
         # Add hardware interface diagram
@@ -517,29 +550,14 @@ class SRSDocumentGenerator:
             last_paragraph = self.doc.paragraphs[-1]
             last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
         
-        # 4.3 Software Interfaces
-        software_interfaces = interfaces_data.get('software_interfaces', {})
-        self.doc.add_heading(software_interfaces.get('title', '4.3 Software Interfaces'), level=2)
-        self.doc.add_paragraph(software_interfaces.get('description', ''))
-        
-        # Add software interface diagram
+        # Optional: software/communication diagrams if provided
         if 'software_interfaces' in image_paths and image_paths['software_interfaces'] and Path(image_paths['software_interfaces']).exists():
-            self.doc.add_paragraph("Software Interface Architecture:", style='Heading 3')
-            self.doc.add_picture(str(image_paths['software_interfaces']), width=Inches(6.0))
+            self.doc.add_paragraph("Software / API architecture:", style='Heading 3')
+            self.doc.add_picture(str(image_paths['software_interfaces']), width=Inches(5.0))
             last_paragraph = self.doc.paragraphs[-1]
             last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        
-        # 4.4 Communication Interfaces
         communication_interfaces = interfaces_data.get('communication_interfaces', {})
-        self.doc.add_heading(communication_interfaces.get('title', '4.4 Communication Interfaces'), level=2)
-        self.doc.add_paragraph(communication_interfaces.get('description', ''))
-        
-        # Add communication interface diagram
-        if 'communication_interfaces' in image_paths and image_paths['communication_interfaces'] and Path(image_paths['communication_interfaces']).exists():
-            self.doc.add_paragraph("Communication Interface Architecture:", style='Heading 3')
-            self.doc.add_picture(str(image_paths['communication_interfaces']), width=Inches(6.0))
-            last_paragraph = self.doc.paragraphs[-1]
-            last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        self.doc.add_paragraph(communication_interfaces.get('description', 'REST-based APIs for data communication. Secure API access controls.'))
     
     def add_nfr_section(self, nfr_data: Dict[str, Any]):
         """
@@ -549,11 +567,11 @@ class SRSDocumentGenerator:
             nfr_data: Dictionary containing NFR section data
         """
         # Section title
-        self.doc.add_heading(f"5. {nfr_data.get('title', 'Non-Functional Requirements')}", level=1)
+        self.doc.add_heading('6. Non-Functional Requirements', level=1)
         
         # Performance Requirements
         performance = nfr_data.get('performance_requirements', {})
-        self.doc.add_heading(f"5.1 {performance.get('title', 'Performance Requirements')}", level=2)
+        self.doc.add_heading(f"6.1 {performance.get('title', 'Performance Requirements')}", level=2)
         perf_reqs = performance.get('requirements', [])
         for req in perf_reqs:
             desc = req.get('description', '')
@@ -564,7 +582,7 @@ class SRSDocumentGenerator:
         
         # Safety Requirements
         safety = nfr_data.get('safety_requirements', {})
-        self.doc.add_heading(f"5.2 {safety.get('title', 'Safety Requirements')}", level=2)
+        self.doc.add_heading(f"6.2 {safety.get('title', 'Safety Requirements')}", level=2)
         safety_reqs = safety.get('requirements', [])
         for req in safety_reqs:
             desc = req.get('description', '')
@@ -573,9 +591,9 @@ class SRSDocumentGenerator:
             if rationale:
                 para.add_run(f"\nRationale: {rationale}").italic = True
         
-        # Security Requirements
+        # Security Requirements (brief; full section 7 follows)
         security = nfr_data.get('security_requirements', {})
-        self.doc.add_heading(f"5.3 {security.get('title', 'Security Requirements')}", level=2)
+        self.doc.add_heading(f"6.3 {security.get('title', 'Security Requirements')}", level=2)
         security_reqs = security.get('requirements', [])
         for req in security_reqs:
             desc = req.get('description', '')
@@ -586,7 +604,7 @@ class SRSDocumentGenerator:
         
         # Quality Attributes
         quality = nfr_data.get('quality_attributes', {})
-        self.doc.add_heading(f"5.4 {quality.get('title', 'Quality Attributes')}", level=2)
+        self.doc.add_heading(f"6.4 {quality.get('title', 'Quality Attributes')}", level=2)
         quality_reqs = quality.get('requirements', [])
         for req in quality_reqs:
             desc = req.get('description', '')
@@ -595,38 +613,54 @@ class SRSDocumentGenerator:
             if rationale:
                 para.add_run(f"\nRationale: {rationale}").italic = True
     
+    def add_security_requirements_section(self):
+        """Section 7: Security Requirements with Security Flow diagram."""
+        self.doc.add_heading('7. Security Requirements', level=1)
+        self.doc.add_paragraph(
+            "The system shall: Enforce secure authentication mechanisms; Use encrypted communication channels; "
+            "Protect sensitive data from unauthorized access; Log security-related events."
+        )
+        path = self.image_paths.get('security_flow')
+        if path and Path(path).exists():
+            self.doc.add_picture(str(path), width=Inches(5.5))
+            last_paragraph = self.doc.paragraphs[-1]
+            last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            self.doc.add_paragraph("The Security Flow Diagram illustrating authentication and authorization has been included above.", style='Heading 3')
+        else:
+            self.doc.add_paragraph("Note: The Security Flow Diagram can be included above.", style='Heading 3')
+    
+    def add_data_requirements_section(self):
+        """Section 8: Data Requirements with ERD."""
+        self.doc.add_heading('8. Data Requirements', level=1)
+        self.doc.add_paragraph("The system shall manage structured data entities and their relationships efficiently.")
+        path = self.image_paths.get('data_erd')
+        if path and Path(path).exists():
+            self.doc.add_picture(str(path), width=Inches(5.5))
+            last_paragraph = self.doc.paragraphs[-1]
+            last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            self.doc.add_paragraph("The Database / Entity Relationship Diagram (ERD) representing data structure and relationships has been included above.", style='Heading 3')
+        else:
+            self.doc.add_paragraph("Note: The Entity Relationship Diagram can be included above.", style='Heading 3')
+    
     def add_glossary_section(self, glossary_data: Dict[str, Any]):
-        """
-        Add Glossary section to the document.
-        
-        Args:
-            glossary_data: Dictionary containing glossary section data
-        """
-        # Section title
-        self.doc.add_heading("6. Glossary", level=1)
-        
+        """Optional: Glossary (definitions are in 1.3). Kept for backward compatibility."""
         sections = glossary_data.get('sections', [])
-        for idx, section in enumerate(sections, 1):
-            section_title = section.get('title', '')
-            self.doc.add_heading(f"6.{idx} {section_title}", level=2)
-            
+        if not sections:
+            return
+        self.doc.add_heading("Definitions (additional)", level=2)
+        for section in sections:
             terms = section.get('terms', [])
             for term_data in terms:
                 term = term_data.get('term', '')
                 definition = term_data.get('definition', '')
-                para = self.doc.add_paragraph()
-                para.add_run(f"{term}: ").bold = True
-                para.add_run(definition)
+                self.doc.add_paragraph(f"{term} – {definition}", style='List Bullet')
     
     def add_assumptions_section(self, assumptions_data: Dict[str, Any]):
         """
-        Add Assumptions section to the document.
-        
-        Args:
-            assumptions_data: Dictionary containing assumptions section data
+        Add Assumptions and Dependencies (Section 10).
         """
         # Section title
-        self.doc.add_heading(f"7. {assumptions_data.get('title', 'Assumptions')}", level=1)
+        self.doc.add_heading('10. Assumptions and Dependencies', level=1)
         
         assumptions = assumptions_data.get('assumptions', [])
         for idx, assumption in enumerate(assumptions, 1):
@@ -640,6 +674,16 @@ class SRSDocumentGenerator:
                 para = self.doc.add_paragraph()
                 para.add_run("Impact: ").bold = True
                 para.add_run(impact)
+    
+    def add_future_enhancements_section(self):
+        """Section 11: Future Enhancements."""
+        self.doc.add_heading('11. Future Enhancements', level=1)
+        for item in [
+            "Mobile application support",
+            "Advanced analytics and insights",
+            "Integration with additional third-party services",
+        ]:
+            self.doc.add_paragraph(item, style='List Bullet')
     
     def save(self, output_path: str):
         """
@@ -714,6 +758,7 @@ def generate_srs_document(
     """
     # Create generator instance
     generator = SRSDocumentGenerator(project_name, authors, organization)
+    generator.image_paths = image_paths
     
     # Add title page
     generator._add_title_page()
@@ -721,14 +766,18 @@ def generate_srs_document(
     # Add Table of Contents
     generator._add_table_of_contents()
     
-    # Add all sections
+    # Add all sections (proper SRS structure 1–11 with diagram placeholders)
     generator.add_introduction_section(introduction_section)
     generator.add_overall_description_section(overall_description_section)
+    generator.add_system_architecture_section()
     generator.add_system_features_section(system_features_section)
-    generator.add_external_interfaces_section(external_interfaces_section, image_paths)
+    generator.add_user_workflow_section()
     generator.add_nfr_section(nfr_section)
-    generator.add_glossary_section(glossary_section)
+    generator.add_security_requirements_section()
+    generator.add_data_requirements_section()
+    generator.add_external_interfaces_section(external_interfaces_section, image_paths)
     generator.add_assumptions_section(assumptions_section)
+    generator.add_future_enhancements_section()
     
     # Add header and footer (must be after all content is added)
     generator._add_header_footer()
