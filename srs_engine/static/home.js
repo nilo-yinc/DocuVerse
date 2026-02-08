@@ -186,7 +186,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const result = await response.json();
             console.log("Server response:", result);
-            alert("SRS generated successfully!");
+
+            const successBox = document.getElementById("srsSuccessBox");
+            const pathEl = document.getElementById("srsSuccessPath");
+            const downloadLink = document.getElementById("srsDownloadLink");
+            if (result.download_url) {
+                const fullUrl = window.location.origin + result.download_url;
+                downloadLink.href = fullUrl;
+                downloadLink.style.display = "inline-block";
+                pathEl.textContent = "Location: " + (result.srs_document_path || "generated_srs folder");
+                successBox.style.display = "block";
+                successBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            }
+            alert("SRS generated successfully! Use the download link below to open the document.");
 
         } catch (error) {
             console.error("Submission error:", error);
