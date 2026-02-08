@@ -1,0 +1,18 @@
+flowchart LR
+    subgraph Actors
+        direction TB
+        A0["Admin"]
+        A1["End User"]
+        A2["Manager"]
+        A3["Analyst"]
+    end
+    subgraph UseCases
+        UC0["User authentication and a"]
+        UC1["Product and inventory man"]
+        UC2["Sales transaction trackin"]
+        UC3["Low-stock alerts and noti"]
+    end
+    A0 --> UC0
+    A0 --> UC1
+    A1 --> UC0
+    A1 --> UC1
