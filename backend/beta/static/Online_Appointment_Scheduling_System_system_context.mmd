@@ -1,0 +1,20 @@
+flowchart LR
+EXT1["Email/SMS Gateway"]
+EXT2["Payment/3rd-Party API"]
+EXT3["Reporting/BI Tool"]
+SYS["Online Appointment Scheduling Syst<br/>Healthcare Domain"]
+E0["End User"]
+E1["Manager"]
+E2["Admin"]
+E3["Analyst"]
+    E0 -->|Requests/Actions| SYS
+    SYS -->|Responses/Notifications| E0
+    E1 -->|Requests/Actions| SYS
+    SYS -->|Responses/Notifications| E1
+    E2 -->|Requests/Actions| SYS
+    SYS -->|Responses/Notifications| E2
+    E3 -->|Requests/Actions| SYS
+    SYS -->|Responses/Notifications| E3
+    SYS -->|Alerts/Updates| EXT1
+    SYS <-->|Secure API Calls| EXT2
+    SYS -->|Exported Insights| EXT3

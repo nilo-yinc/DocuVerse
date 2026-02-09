@@ -17,6 +17,16 @@ export default {
           card: '#1a1a1a',
           input: '#2a2a2a'
         }
+      },
+      keyframes: {
+        "cell-ripple": {
+          "0%": { opacity: "0.4" },
+          "50%": { opacity: "0.8" },
+          "100%": { opacity: "0.4" }
+        }
+      },
+      animation: {
+        "cell-ripple": "cell-ripple 0.2s ease-out forwards"
       }
     },
   },

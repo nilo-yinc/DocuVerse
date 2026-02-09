@@ -1,0 +1,25 @@
+flowchart LR
+    subgraph Actors
+        direction TB
+        A0["End User"]
+        A1["Manager"]
+        A2["Admin"]
+        A3["Analyst"]
+    end
+    subgraph UseCases
+        UC0["User registration and login"]
+        UC1["Role-based access control"]
+        UC2["Appointment booking and cancel"]
+        UC3["Real-time availability checkin"]
+        UC4["Email and SMS notifications"]
+        UC5["Admin dashboard for schedule m"]
+    end
+    A0 --> UC0
+    A0 --> UC1
+    A0 --> UC2
+    A1 --> UC0
+    A1 --> UC1
+    A1 --> UC2
+    A2 --> UC0
+    A2 --> UC1
+    A2 --> UC2

@@ -1,0 +1,185 @@
+{
+  "name": "DocuVerse - SRS Generated Notification",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "srs-generated",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-srs-generated",
+      "name": "Webhook - SRS Generated",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "srs-generated"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.event}}",
+              "value2": "srs.generated"
+            }
+          ]
+        }
+      },
+      "id": "validate-event",
+      "name": "Validate Event",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Extract project data\nconst projectData = {\n  projectId: $json.project.id,\n  projectName: $json.project.name,\n  domain: $json.project.domain,\n  shareId: $json.project.shareId,\n  documentPath: $json.project.documentPath,\n  viewLink: $json.links.view,\n  downloadLink: $json.links.download,\n  timestamp: $json.timestamp\n};\n\nreturn [{ json: projectData }];"
+      },
+      "id": "extract-data",
+      "name": "Extract Project Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [650, 200]
+    },
+    {
+      "parameters": {
+        "content": "📄 **New SRS Document Generated!**\n\n**Project:** {{$json.projectName}}\n**Domain:** {{$json.domain}}\n**Share ID:** {{$json.shareId}}\n\n**Links:**\n🔗 View: {{$json.viewLink}}\n⬇️ Download: {{$json.downloadLink}}\n\n**Generated at:** {{$json.timestamp}}",
+        "chatId": "YOUR_SLACK_CHANNEL_ID",
+        "options": {}
+      },
+      "id": "send-slack-notification",
+      "name": "Send Slack Notification",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [850, 150],
+      "credentials": {
+        "slackApi": {
+          "id": "1",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "subject": "✅ SRS Document Generated - {{$json.projectName}}",
+        "emailBody": "Hello,\n\nYour SRS document has been successfully generated!\n\n**Project Details:**\n- Name: {{$json.projectName}}\n- Domain: {{$json.domain}}\n- Share ID: {{$json.shareId}}\n\n**Access Your Document:**\n- View Project: {{$json.viewLink}}\n- Download SRS: {{$json.downloadLink}}\n\nGenerated at: {{$json.timestamp}}\n\nBest regards,\nDocuVerse Team",
+        "toEmail": "user@example.com",
+        "options": {}
+      },
+      "id": "send-email",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [850, 300],
+      "credentials": {
+        "smtp": {
+          "id": "2",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://hooks.slack.com/services/YOUR/WEBHOOK/URL",
+        "options": {
+          "bodyContentType": "json"
+        },
+        "bodyParametersJson": "={\n  \"text\": \"📊 New SRS: {{$json.projectName}}\",\n  \"blocks\": [\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*New SRS Generated*\\n{{$json.projectName}} - {{$json.domain}}\"\n      }\n    },\n    {\n      \"type\": \"actions\",\n      \"elements\": [\n        {\n          \"type\": \"button\",\n          \"text\": {\n            \"type\": \"plain_text\",\n            \"text\": \"View Project\"\n          },\n          \"url\": \"{{$json.viewLink}}\"\n        },\n        {\n          \"type\": \"button\",\n          \"text\": {\n            \"type\": \"plain_text\",\n            \"text\": \"Download SRS\"\n          },\n          \"url\": \"{{$json.downloadLink}}\"\n        }\n      ]\n    }\n  ]\n}"
+      },
+      "id": "webhook-slack",
+      "name": "Webhook to Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [850, 450]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"message\": \"Notifications sent\", \"projectId\": $json.projectId } }}"
+      },
+      "id": "webhook-response",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": false, \"message\": \"Invalid event type\" } }}"
+      },
+      "id": "error-response",
+      "name": "Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [650, 400]
+    }
+  ],
+  "connections": {
+    "Webhook - SRS Generated": {
+      "main": [
+        [
+          {
+            "node": "Validate Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Event": {
+      "main": [
+        [
+          {
+            "node": "Extract Project Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Project Data": {
+      "main": [
+        [
+          {
+            "node": "Send Slack Notification",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Webhook to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {},
+  "tags": []
+}

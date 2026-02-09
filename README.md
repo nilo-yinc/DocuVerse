@@ -39,6 +39,38 @@ An intelligent multi-agent system that automates SRS creation using **Google Gem
 
 ---
 
+## 🔗 n8n Webhook Integration
+
+DocuVerse now supports **n8n webhooks** for powerful automation!
+
+### ✨ Features
+- 🔔 Automatic notifications (Slack, Email, Discord, etc.)
+- 🤖 300+ app integrations via n8n
+- 🔄 Bidirectional webhook communication
+- 📊 Custom workflow automation
+
+### 🚀 Quick Setup
+```bash
+# 1. Run setup script
+setup-n8n.bat
+
+# 2. Configure .env
+N8N_ENABLED=true
+N8N_WEBHOOK_URL=http://localhost:5678
+N8N_WEBHOOK_SECRET=your_secret_here
+
+# 3. Import workflows from n8n_workflows/
+# 4. Start using!
+```
+
+### 📚 Documentation
+- **Setup:** `N8N_SETUP.md`
+- **Integration:** `N8N_INTEGRATION.md`
+- **Checklist:** `N8N_SETUP_CHECKLIST.md`
+- **Overview:** `N8N_README.md`
+
+---
+
 ## 📦 Prerequisites
 
 | Requirement | Version | Download |

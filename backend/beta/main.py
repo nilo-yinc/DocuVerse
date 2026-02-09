@@ -1,9 +1,11 @@
-from fastapi import FastAPI, Request, HTTPException, BackgroundTasks, Query
+from fastapi import FastAPI, Request, HTTPException, BackgroundTasks, Query, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from google.adk.sessions import InMemorySessionService
 import uuid
+from dotenv import load_dotenv, find_dotenv
+from pathlib import Path
 from backend.beta.agents.introduction_agent import create_introduction_agent 
 from backend.beta.agents.overall_description_agent import create_overall_description_agent 
 from backend.beta.agents.system_features_agent import create_system_features_agent
@@ -12,6 +14,32 @@ from backend.beta.agents.nfr_agent import create_nfr_agent
 from backend.beta.agents.glossary_agent import create_glossary_agent
 from backend.beta.agents.assumptions_agent import create_assumptions_agent
 from backend.beta.schemas.srs_input_schema import SRSRequest
+from pydantic import BaseModel
+from typing import List, Optional
+import os
+import requests
+
+_root_env = find_dotenv()
+_backend_env = Path(__file__).resolve().parents[1] / ".env"
+if _backend_env.exists():
+    load_dotenv(_backend_env, override=False)
+if _root_env:
+    load_dotenv(_root_env, override=False)
+
+class NotebookRequest(BaseModel):
+    content: str
+
+class ImageRequest(BaseModel):
+    prompt: str
+    width: int = 1024
+    height: int = 1024
+    steps: int = 40
+    cfg_scale: float = 9.0
+
+class NotebookChatRequest(BaseModel):
+    content: str
+    query: str
+    history: List[dict] = []
 from backend.beta.utils.globals import (
     create_session ,
     create_runner ,
@@ -27,7 +55,7 @@ import os
 import time
 from datetime import datetime
 from backend.beta.utils.srs_document_generator import generate_srs_document
-from backend.beta.utils.model import API_KEY_CONFIGURED, GROQ_API_KEY, GROQ_MODEL
+from backend.beta.utils.model import API_KEY_CONFIGURED, GROQ_API_KEY, GROQ_MODEL, GEMINI_API_KEY
 from backend.beta.utils.fallback_srs import build_minimal_sections
 from backend.beta.utils.srs_diagrams import get_all_srs_diagrams
 import json
@@ -473,6 +501,9 @@ def _build_sections_with_ai(inputs: dict, project_name: str, project_key: str = 
             genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
             
             detail_instruction = "Ensure the content is concise but professional."
+            extra_instructions = (inputs.get("output_control") or {}).get("additional_instructions")
+            if extra_instructions:
+                detail_instruction = f"{detail_instruction}\nAdditional instructions: {extra_instructions}"
             json_structure = """
                 "functional_requirements": [
                     {
@@ -615,7 +646,7 @@ def _build_sections_with_ai(inputs: dict, project_name: str, project_key: str = 
 
 
 def _generate_document(project_name: str, project_key: str, inputs: dict, sections: dict, image_paths: dict, variant: str):
-    return generate_srs_document(
+    output_file = generate_srs_document(
         project_name=project_name,
         introduction_section=sections["introduction_section"],
         overall_description_section=sections["overall_description_section"],
@@ -631,6 +662,17 @@ def _generate_document(project_name: str, project_key: str, inputs: dict, sectio
         sections=sections,
         mode=variant
     )
+    
+    # Auto-publish as sample report for Landing Page demo
+    try:
+        import shutil
+        sample_path = os.path.join("backend", "beta", "static", "sample_report.docx")
+        shutil.copy(output_file, sample_path)
+        print(f"📄 Updated public sample report at: {sample_path}")
+    except Exception as e:
+        print(f"⚠️ Failed to update sample report: {e}")
+        
+    return output_file
 
 
 def _generate_instant_fallback(project_name: str, project_key: str, inputs: dict, image_paths: dict):
@@ -915,6 +957,399 @@ async def generate_srs(
             raise HTTPException(status_code=500, detail=f"Unexpected error; instant fallback failed: {fallback_err}")
 
 
+# --- AI Notebook Endpoints ---
+
+from backend.beta.services.workflow_service import WorkflowService
+
+@app.post("/api/notebook/analyze")
+async def analyze_notebook(request: NotebookRequest):
+    """
+    Analyzes notebook content via WorkflowService (n8n or Local Gemini).
+    """
+    try:
+        payload = {"content": request.content}
+        result = await WorkflowService.execute_workflow("analyze", payload)
+        return JSONResponse(content=result)
+    except Exception as e:
+        print(f"Notebook Analysis Error: {e}")
+        return JSONResponse(content={"services": []})
+
+@app.post("/api/notebook/chat")
+async def chat_notebook(request: NotebookChatRequest):
+    """
+    Context-aware chat via WorkflowService (n8n or Local Gemini).
+    """
+    try:
+        payload = {
+            "content": request.content,
+            "query": request.query,
+            "history": request.history
+        }
+        result = await WorkflowService.execute_workflow("chat", payload)
+        return JSONResponse(content=result)
+
+    except Exception as e:
+        print(f"Notebook Chat Error: {e}")
+        return JSONResponse(content={"answer": f"Error interacting with workflow engine: {str(e)}"})
+
+@app.post("/api/notebook/diagram")
+async def generate_diagram(request: NotebookRequest):
+    """
+    Generates ReactFlow diagram JSON via WorkflowService.
+    """
+    try:
+        payload = {"content": request.content}
+        result = await WorkflowService.execute_workflow("diagram", payload)
+        return JSONResponse(content=result)
+    except Exception as e:
+        print(f"Diagram Gen Error: {e}")
+        return JSONResponse(content={"nodes": [], "edges": []})
+
+@app.post("/api/notebook/image")
+async def generate_image(request: ImageRequest):
+    api_key = os.getenv("STABILITY_API_KEY", "").strip()
+    if not api_key:
+        raise HTTPException(status_code=500, detail="STABILITY_API_KEY not configured")
+
+    negative_prompt = os.getenv(
+        "STABILITY_NEGATIVE_PROMPT",
+        "blurry, distorted, unreadable text, misspelled text, watermark, logo, noisy background"
+    ).strip()
+    payload = {
+        "text_prompts": [
+            {"text": request.prompt, "weight": 1},
+            {"text": negative_prompt, "weight": -1}
+        ],
+        "cfg_scale": request.cfg_scale,
+        "height": request.height,
+        "width": request.width,
+        "samples": 1,
+        "steps": request.steps
+    }
+    style_preset = os.getenv("STABILITY_STYLE_PRESET", "line-art").strip()
+    if style_preset:
+        payload["style_preset"] = style_preset
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    try:
+        custom_url = os.getenv("STABILITY_API_URL", "").strip()
+        base_url = os.getenv("STABILITY_API_BASE", "https://api.stability.ai/v1/generation").strip()
+        engine = os.getenv("STABILITY_ENGINE", "stable-diffusion-xl-1024-v1-0").strip()
+
+        engine_candidates = [engine, "stable-diffusion-xl-1024-v1-0", "stable-diffusion-v1-6"]
+        tried = set()
+        last_error = None
+
+        for engine_id in engine_candidates:
+            if engine_id in tried:
+                continue
+            tried.add(engine_id)
+            api_url = custom_url or f"{base_url}/{engine_id}/text-to-image"
+            resp = requests.post(api_url, headers=headers, json=payload, timeout=60)
+            if resp.status_code != 200:
+                last_error = resp.text
+                if resp.status_code in (400, 404) and "not found" in resp.text.lower() and not custom_url:
+                    continue
+                raise HTTPException(status_code=500, detail=f"Image generation failed: {resp.text}")
+            data = resp.json()
+            base64_img = None
+            if isinstance(data, dict) and data.get("artifacts"):
+                base64_img = data["artifacts"][0].get("base64")
+            if not base64_img:
+                return JSONResponse(content={"image": None})
+            return JSONResponse(content={"image": f"data:image/png;base64,{base64_img}"})
+
+        raise HTTPException(status_code=500, detail=f"Image generation failed: {last_error}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Image generation error: {e}")
+
+@app.get("/api/notebook/image/status")
+async def image_status():
+    api_key = os.getenv("STABILITY_API_KEY", "").strip()
+    return JSONResponse(content={
+        "enabled": bool(api_key),
+        "reason": "" if api_key else "STABILITY_API_KEY missing"
+    })
+
+# --- DocuVerse Studio & Project Endpoints ---
+
+from backend.beta.models.project import Project, ReviewFeedback, WorkflowEvent
+from backend.beta.services.project_store import ProjectStore
+import uuid
+
+class CreateProjectRequest(BaseModel):
+    name: str
+    content: str
+    documentUrl: Optional[str] = None
+
+class ReviewRequest(BaseModel):
+    projectId: str
+    clientEmail: str
+    documentLink: Optional[str] = None
+    senderEmail: Optional[str] = None
+    projectName: Optional[str] = None
+    insights: Optional[list] = None
+    notes: Optional[str] = None
+
+class WebhookCallbackRequest(BaseModel):
+    projectId: str
+    action: str # APPROVED, REJECTED
+    feedbackText: Optional[str] = None
+
+@app.post("/api/project/create")
+async def create_project(request: CreateProjectRequest):
+    project_id = str(uuid.uuid4())
+    project = Project(
+        id=project_id,
+        name=request.name,
+        contentMarkdown=request.content,
+        documentUrl=request.documentUrl
+    )
+    ProjectStore.save_project(project)
+    return JSONResponse(content={"id": project_id, "message": "Project created successfully"})
+
+@app.get("/api/project/{project_id}")
+async def get_project(project_id: str):
+    project = ProjectStore.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+@app.post("/api/workflow/start-review")
+async def start_review(request: ReviewRequest):
+    project = ProjectStore.get_project(request.projectId)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Update Status
+    ProjectStore.update_status(project.id, "IN_REVIEW")
+    project.clientEmail = request.clientEmail
+    project.reviewToken = project.reviewToken or str(uuid.uuid4())
+    project.reviewTokenUsed = False
+    project.workflowEvents.append(WorkflowEvent(
+        date=datetime.now().isoformat(),
+        title="Review Started",
+        description="Email sent to client for review.",
+        status="IN_REVIEW"
+    ))
+    
+    from backend.beta.utils.email_service import send_review_email
+
+    doc_link = request.documentLink or project.documentUrl or f"/download_srs/{project.id}_SRS.docx"
+    project_title = request.projectName or project.name or "DocuVerse Project"
+    sender = request.senderEmail
+    insights = request.insights or []
+    notes = request.notes or ""
+
+    insights_block = ""
+    if insights:
+        lines = []
+        for item in insights:
+            title = item.get("title", "Insight")
+            desc = item.get("desc", "")
+            lines.append(f"- {title}: {desc}")
+        insights_block = "\nInsights:\n" + "\n".join(lines)
+
+    body = f"""Hello,
+
+You have been invited to review the SRS for: {project_title}
+
+Document link: {doc_link}
+{insights_block}
+
+Notes:
+{notes or "No additional notes provided."}
+
+Please reply to this email with your review comments.
+"""
+
+    warning = None
+    try:
+        send_review_email(
+            to_email=request.clientEmail,
+            subject=f"DocuVerse Review: {project_title}",
+            body=body,
+            reply_to=sender,
+            document_link=doc_link,
+            project_id=project.id,
+            review_token=project.reviewToken
+        )
+    except Exception as e:
+        warning = str(e)
+        print(f"Email send failed: {warning}")
+
+    response = {
+        "status": "IN_REVIEW",
+        "message": f"Review started for {request.clientEmail}"
+    }
+    if warning:
+        response["warning"] = warning
+    return JSONResponse(content=response)
+
+@app.post("/api/workflow/resend-review")
+async def resend_review(request: ReviewRequest):
+    project = ProjectStore.get_project(request.projectId)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    ProjectStore.update_status(project.id, "IN_REVIEW")
+    project.clientEmail = request.clientEmail
+    project.reviewToken = project.reviewToken or str(uuid.uuid4())
+    project.reviewTokenUsed = False
+    project.workflowEvents.append(WorkflowEvent(
+        date=datetime.now().isoformat(),
+        title="Review Resent",
+        description="Updated review email sent to client.",
+        status="IN_REVIEW"
+    ))
+
+    from backend.beta.utils.email_service import send_review_email
+
+    doc_link = request.documentLink or project.documentUrl or f"/download_srs/{project.id}_SRS.docx"
+    project_title = request.projectName or project.name or "DocuVerse Project"
+    sender = request.senderEmail
+    insights = request.insights or []
+    notes = request.notes or ""
+
+    insights_block = ""
+    if insights:
+        lines = []
+        for item in insights:
+            title = item.get("title", "Insight")
+            desc = item.get("desc", "")
+            lines.append(f"- {title}: {desc}")
+        insights_block = "\nInsights:\n" + "\n".join(lines)
+
+    body = f"""Hello,
+
+Updated review requested for: {project_title}
+
+Document link: {doc_link}
+{insights_block}
+
+Notes:
+{notes or "No additional notes provided."}
+
+Please reply to this email with your review comments.
+"""
+
+    warning = None
+    try:
+        send_review_email(
+            to_email=request.clientEmail,
+            subject=f"DocuVerse Review Update: {project_title}",
+            body=body,
+            reply_to=sender,
+            document_link=doc_link,
+            project_id=project.id,
+            review_token=project.reviewToken
+        )
+    except Exception as e:
+        warning = str(e)
+        print(f"Email resend failed: {warning}")
+
+    response = {
+        "status": "IN_REVIEW",
+        "message": f"Review resent to {request.clientEmail}"
+    }
+    if warning:
+        response["warning"] = warning
+    return JSONResponse(content=response)
+
+@app.post("/api/workflow/webhook-callback")
+async def webhook_callback(request: WebhookCallbackRequest):
+    project = ProjectStore.get_project(request.projectId)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+        
+    if request.action == "APPROVED":
+        ProjectStore.update_status(project.id, "APPROVED")
+    elif request.action == "REJECTED":
+        ProjectStore.update_status(project.id, "CHANGES_REQUESTED")
+        if request.feedbackText:
+            feedback = ReviewFeedback(
+                date=datetime.now().isoformat(),
+                comment=request.feedbackText,
+                source="Client"
+            )
+            ProjectStore.add_feedback(project.id, feedback)
+            
+    return JSONResponse(content={"message": "Callback processed", "new_status": project.status})
+
+@app.get("/api/workflow/review")
+async def review_from_email(projectId: str, action: str, token: Optional[str] = None):
+    project = ProjectStore.get_project(projectId)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if project.reviewToken and token != project.reviewToken:
+        raise HTTPException(status_code=403, detail="Invalid review token")
+    if project.reviewTokenUsed:
+        return HTMLResponse(content="<h2>Review already processed</h2><p>This review link has already been used.</p>")
+
+    if action == "APPROVED":
+        ProjectStore.update_status(project.id, "APPROVED")
+        project.reviewTokenUsed = True
+        project.workflowEvents.append(WorkflowEvent(
+            date=datetime.now().isoformat(),
+            title="Approved",
+            description="Client approved the document.",
+            status="APPROVED"
+        ))
+        return HTMLResponse(content="<h2>Review recorded: Approved</h2><p>You can close this tab.</p>")
+    if action == "REJECTED":
+        ProjectStore.update_status(project.id, "CHANGES_REQUESTED")
+        project.workflowEvents.append(WorkflowEvent(
+            date=datetime.now().isoformat(),
+            title="Changes Requested",
+            description="Client requested changes.",
+            status="CHANGES_REQUESTED"
+        ))
+        return HTMLResponse(content=f"""
+        <html>
+          <body style="font-family: Arial, sans-serif; background:#0f141b; color:#e6edf3; padding:24px;">
+            <h2>Changes Requested</h2>
+            <p>Please add your review notes below:</p>
+            <form method="post" action="/api/workflow/review-feedback">
+              <input type="hidden" name="projectId" value="{project.id}" />
+              <input type="hidden" name="token" value="{token or ''}" />
+              <textarea name="feedbackText" rows="6" style="width:100%; max-width:720px; padding:12px; border-radius:8px; border:1px solid #30363d; background:#161b22; color:#e6edf3;"></textarea>
+              <div style="margin-top:12px;">
+                <button type="submit" style="background:#dc2626; color:white; border:none; padding:10px 16px; border-radius:6px;">Send Feedback</button>
+              </div>
+            </form>
+          </body>
+        </html>
+        """)
+
+    raise HTTPException(status_code=400, detail="Invalid action")
+
+@app.post("/api/workflow/review-feedback")
+async def review_feedback(projectId: str = Form(...), feedbackText: str = Form(...), token: str = Form("")):
+    project = ProjectStore.get_project(projectId)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project.reviewToken and token != project.reviewToken:
+        raise HTTPException(status_code=403, detail="Invalid review token")
+    ProjectStore.update_status(project.id, "CHANGES_REQUESTED")
+    feedback = ReviewFeedback(
+        date=datetime.now().isoformat(),
+        comment=feedbackText,
+        source="Client"
+    )
+    ProjectStore.add_feedback(project.id, feedback)
+    project.reviewTokenUsed = True
+    project.workflowEvents.append(WorkflowEvent(
+        date=datetime.now().isoformat(),
+        title="Feedback Received",
+        description="Client submitted feedback.",
+        status="CHANGES_REQUESTED"
+    ))
+    return HTMLResponse(content="<h2>Feedback received</h2><p>Thank you. You can close this tab.</p>")
 
 
 
@@ -926,3 +1361,36 @@ async def generate_srs(
 
 
 
+
+
+
+@app.post("/api/project/{project_id}/upload-review")
+async def upload_review(project_id: str, file: UploadFile = File(...)):
+    project = ProjectStore.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Save file
+    filename = f"{project_id}_reviewed_{file.filename}"
+    file_path = Path("backend/beta/static") / filename
+    with open(file_path, "wb") as buffer:
+        import shutil
+        shutil.copyfileobj(file.file, buffer)
+        
+    # Update project
+    ProjectStore.update_status(project.id, "CHANGES_REQUESTED")
+    project.reviewedDocumentUrl = f"/static/{filename}"
+    
+    # Add system feedback
+    feedback = ReviewFeedback(
+        date=datetime.now().isoformat(),
+        comment="Client uploaded a marked-up document with changes.",
+        source="Client Attachment"
+    )
+    ProjectStore.add_feedback(project.id, feedback)
+
+    return JSONResponse(content={
+        "status": "CHANGES_REQUESTED",
+        "reviewedDocumentUrl": project.reviewedDocumentUrl,
+        "message": "Review document uploaded successfully"
+    })

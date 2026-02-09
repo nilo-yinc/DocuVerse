@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 // import { buildEnterpriseDocx } from '../utils/buildEnterpriseDocx'; // Will create next
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { User, FileText } from 'lucide-react';
 import ProfileSettings from './ProfileSettings';
 
 const EnterpriseForm = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { user } = useAuth();
     const [showProfile, setShowProfile] = useState(false);
     const [step, setStep] = useState(1);
@@ -45,7 +46,8 @@ const EnterpriseForm = () => {
         deploymentPref: '',
 
         // 7. Output
-        detailLevel: 'Professional'
+        detailLevel: 'Professional',
+        additionalInstructions: ''
     });
 
     const [isLoaded, setIsLoaded] = useState(false);
@@ -65,6 +67,17 @@ const EnterpriseForm = () => {
         }
         setIsLoaded(true); // Mark as loaded so we can start saving
     }, []);
+
+    useEffect(() => {
+        const prefill = location.state?.prefill;
+        const prefillStep = location.state?.step;
+        if (prefill) {
+            setFormData(prev => ({ ...prev, ...prefill }));
+        }
+        if (prefillStep) {
+            setStep(prefillStep);
+        }
+    }, [location.state]);
 
     // Save to Local Storage on Change
     useEffect(() => {
@@ -302,6 +315,7 @@ const EnterpriseForm = () => {
                                 <div>
                                     <h2 className="text-3xl font-bold text-white mb-6 border-l-4 border-neon-purple pl-4">VII. Output Control</h2>
                                     {renderSelect('SRS Detail Level', 'detailLevel', ['Standard (Academic)', 'Professional (Enterprise)', 'Brief (Startup MVP)'])}
+                                    {renderInput('Other / Extra Instructions', 'additionalInstructions', 'Add any extra instructions or changes to include in the SRS...', 'textarea')}
 
                                     <div className="mt-10 border-t border-gray-800 pt-6">
                                         <button

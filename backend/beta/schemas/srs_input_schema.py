@@ -110,12 +110,20 @@ class TechnicalPreferences(BaseModel):
 class OutputControl(BaseModel):
     """Output generation control"""
     srs_detail_level: str = Field(..., description="Detail level for the generated SRS")
+    additional_instructions: Optional[str] = Field(None, description="Additional instructions for SRS generation")
     
     @validator('srs_detail_level')
     def validate_detail_level(cls, v):
         valid_levels = ["High-level", "Technical", "Enterprise-grade"]
         if v not in valid_levels:
             raise ValueError(f'Detail level must be one of {valid_levels}')
+        return v
+
+    @validator('additional_instructions')
+    def strip_instructions(cls, v):
+        if v:
+            stripped = v.strip()
+            return stripped if stripped else None
         return v
 
 

@@ -4,7 +4,7 @@ from google.adk.models.lite_llm import LiteLlm
 
 load_dotenv(find_dotenv())
 
-GROQ_MODEL = os.getenv("GROQ_MODEL", "gemini/gemini-1.5-pro-latest").strip()
+GROQ_MODEL = os.getenv("GROQ_MODEL", "groq/llama-3.1-8b-instant").strip()
 GROQ_API_KEY = (os.getenv("GROQ_API_KEY") or "").strip()
 GEMINI_API_KEY = (os.getenv("GEMINI_API_KEY") or "").strip()
 

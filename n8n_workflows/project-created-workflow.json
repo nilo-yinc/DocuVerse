@@ -1,0 +1,63 @@
+{
+  "name": "DocuVerse - Project Created",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "project-created",
+        "responseMode": "responseNode"
+      },
+      "id": "webhook-project-created",
+      "name": "Webhook - Project Created",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Log project creation\nconst data = {\n  projectId: $json.project.id,\n  projectName: $json.project.name,\n  domain: $json.project.domain,\n  userId: $json.project.userId,\n  timestamp: $json.timestamp\n};\n\nconsole.log('New Project Created:', data);\n\nreturn [{ json: data }];"
+      },
+      "id": "log-project",
+      "name": "Log Project",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"message\": \"Project logged\", \"projectId\": $json.projectId } }}"
+      },
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [650, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Project Created": {
+      "main": [
+        [
+          {
+            "node": "Log Project",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Project": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true
+}

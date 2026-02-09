@@ -24,6 +24,7 @@ const EnterpriseGeneration = () => {
     const [recovering, setRecovering] = useState(false);
     const [downloadUrl, setDownloadUrl] = useState('');
     const [hqDownloadUrl, setHqDownloadUrl] = useState('');
+    const [studioLoading, setStudioLoading] = useState(false);
     const formData = loc.state?.formData;
     const REQUEST_TIMEOUT_MS = 180000; // quality-first quick mode timeout
 
@@ -98,6 +99,7 @@ const EnterpriseGeneration = () => {
         },
         output_control: {
             srs_detail_level: mapDetailLevel(fd.detailLevel),
+            additional_instructions: (fd.additionalInstructions || '').trim() || null,
         },
     });
 
@@ -502,11 +504,10 @@ const EnterpriseGeneration = () => {
                             <button
                                 onClick={handleGenerateHighQuality}
                                 disabled={hqLoading}
-                                className={`font-bold px-8 py-3 rounded-lg transition w-full max-w-sm flex items-center justify-center gap-2 ${
-                                    hqLoading
-                                        ? 'bg-[#2b3137] text-[#8e98a0] cursor-not-allowed'
-                                        : 'bg-[#3a7ca5] text-[#0e1116] hover:bg-[#2e6b90]'
-                                }`}
+                                className={`font-bold px-8 py-3 rounded-lg transition w-full max-w-sm flex items-center justify-center gap-2 ${hqLoading
+                                    ? 'bg-[#2b3137] text-[#8e98a0] cursor-not-allowed'
+                                    : 'bg-[#3a7ca5] text-[#0e1116] hover:bg-[#2e6b90]'
+                                    }`}
                             >
                                 <Sparkles size={16} /> {hqLoading ? 'Generating HQ...' : 'Generate High Quality'}
                             </button>
@@ -539,6 +540,60 @@ const EnterpriseGeneration = () => {
                                 className="bg-[#1b1f23] text-[#f5f1e8] font-semibold px-8 py-4 rounded-lg border border-[#2b3137] hover:bg-[#232a31] transition"
                             >
                                 Generate Another
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    console.log("Open in Studio clicked");
+                                    if (!formData) {
+                                        console.error("No formData found");
+                                        setError("Session data missing. Cannot create project.");
+                                        return;
+                                    }
+
+                                    setStudioLoading(true);
+                                    try {
+                                        const projectName = formData.projectName || "Untitled Project";
+                                        const coreFeaturesList = toList(formData.coreFeatures);
+                                        const featureBlock = coreFeaturesList.length
+                                            ? `- ${coreFeaturesList.join('\n- ')}`
+                                            : "N/A";
+                                        const initialMarkdown = `# ${projectName} - SRS Notes\n\n**Problem Statement:**\n${formData.problemStatement || "N/A"}\n\n**Core Features:**\n${featureBlock}\n\n**User Flow:**\n${formData.userFlow || "N/A"}`;
+
+                                        // Use the best available URL
+                                        const finalDocUrl = hqDownloadUrl || downloadUrl || null;
+                                        console.log("Creating project with docUrl:", finalDocUrl);
+
+                                        const res = await axios.post('/api/project/create', {
+                                            name: projectName,
+                                            content: initialMarkdown,
+                                            documentUrl: finalDocUrl
+                                        });
+                                        console.log("Project created:", res.data);
+                                        if (res.data.id) {
+                                            navigate(`/studio/${res.data.id}`);
+                                        } else {
+                                            throw new Error("No project ID returned");
+                                        }
+                                    } catch (e) {
+                                        console.error("Failed to create studio project", e);
+                                        setError(`Failed to open Studio: ${e.response?.data?.detail || e.message}`);
+                                    } finally {
+                                        setStudioLoading(false);
+                                    }
+                                }}
+                                disabled={studioLoading}
+                                className={`bg-[#a371f7] text-white font-bold px-8 py-4 rounded-lg hover:bg-[#8957e5] transition border border-[#a371f7] shadow-[0_0_15px_rgba(163,113,247,0.3)] flex items-center justify-center gap-2 ${studioLoading ? 'opacity-70 cursor-wait' : ''}`}
+                            >
+                                {studioLoading ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                        Creating Workspace...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Sparkles size={16} /> Open in DocuVerse Studio
+                                    </>
+                                )}
                             </button>
                             <button
                                 onClick={() => navigate('/dashboard')}

@@ -4,6 +4,7 @@ const isLoggedIn = require('../middlewares/isLoggedIn.middleware');
 const Project = require('../models/Project');
 const axios = require('axios');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const n8nWebhookService = require('../services/n8n-webhook.service');
 
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -47,6 +48,10 @@ router.post('/save', isLoggedIn, async (req, res) => {
         }
 
         await project.save();
+        
+        // Send webhook notification to n8n
+        await n8nWebhookService.notifyProjectCreated(project);
+        
         res.json(project);
     } catch (err) {
         console.error(err.message);
@@ -78,6 +83,9 @@ router.post('/generate-prototype', isLoggedIn, async (req, res) => {
         project.prototypeHtml = text;
         project.hasPrototype = true;
         await project.save();
+        
+        // Send webhook notification
+        await n8nWebhookService.notifyPrototypeGenerated(projectId, `/demo/${projectId}`);
 
         res.json({ prototypeHtml: text });
     } catch (err) {
@@ -153,7 +161,14 @@ router.post('/enterprise/generate', isLoggedIn, async (req, res) => {
         // Assuming Python backend runs on port 8000
         const pythonResponse = await axios.post('http://127.0.0.1:8000/generate_srs', srsRequest);
         
-        // 5. Return Download URL
+        // 5. Send webhook notification
+        await n8nWebhookService.notifySRSGenerated({
+            ...project.toObject(),
+            srsDocumentPath: pythonResponse.data.download_url,
+            downloadUrl: pythonResponse.data.download_url
+        });
+        
+        // 6. Return Download URL
         // The Python backend returns a relative download_url like /download_srs/Filename.docx
         res.json({ srs_document_path: pythonResponse.data.download_url });
 

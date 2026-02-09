@@ -21,6 +21,7 @@ app.use(cookieParser());
 // Routes
 app.use('/api/v1/users', require('./routes/user.routes'));
 app.use('/api/projects', require('./routes/projects'));
+app.use('/api/webhooks', require('./routes/webhooks'));
 
 app.get('/', (req, res) => {
     res.send('DocuVerse API Running');
