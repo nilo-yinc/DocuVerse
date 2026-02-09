@@ -1,0 +1,28 @@
+erDiagram
+    USER ||--o{ SESSION : has
+    USER ||--o{ ROLE : assigned
+    USER {
+        int id PK
+        string name
+        string email
+    }
+    SESSION {
+        int id PK
+        int user_id FK
+        datetime created
+    }
+    ROLE {
+        int id PK
+        string name
+    }
+    DATA ||--o{ AUDIT : generates
+    DATA {
+        int id PK
+        string payload
+        datetime updated
+    }
+    AUDIT {
+        int id PK
+        int data_id FK
+        string action
+    }

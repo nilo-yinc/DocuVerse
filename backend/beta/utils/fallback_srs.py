@@ -43,6 +43,7 @@ def build_minimal_sections(inputs: dict) -> Dict[str, Any]:
     target_users = pi.get("target_users") or []
     core_features = fs.get("core_features") or []
     primary_flow = fs.get("primary_user_flow") or ""
+    domain = sc.get("domain", "")
 
     introduction_section = {
         "title": "1. Introduction",
@@ -62,7 +63,6 @@ def build_minimal_sections(inputs: dict) -> Dict[str, Any]:
     }
 
     app_type = sc.get("application_type", "")
-    domain = sc.get("domain", "")
     overall_description_section = {
         "title": "2. Overall Description",
         "product_perspective": {

@@ -1,0 +1,9 @@
+flowchart LR
+    U([User]) --> A[Submit credentials]
+    A --> B{Authenticate}
+    B -->|Success| C[Issue token/session]
+    B -->|Fail| D[Deny access]
+    C --> E{Authorized for action?}
+    E -->|Yes| F[Allow access]
+    E -->|No| G[Deny / Redirect]
+    F --> H[Log security event]

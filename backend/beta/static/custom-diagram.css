@@ -1,0 +1,27 @@
+svg {
+  font-family: Arial, Helvetica, sans-serif !important;
+}
+
+.node rect,
+.node circle,
+.node ellipse,
+.node polygon,
+.node path {
+  stroke-width: 1.8px !important;
+}
+
+.cluster rect {
+  rx: 8px !important;
+  ry: 8px !important;
+  stroke-width: 1.8px !important;
+}
+
+.edgePath path {
+  stroke-width: 1.6px !important;
+}
+
+.edgeLabel {
+  background-color: #ffffff !important;
+  color: #1f2937 !important;
+  font-size: 13px !important;
+}

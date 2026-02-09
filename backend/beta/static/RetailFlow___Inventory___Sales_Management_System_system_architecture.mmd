@@ -1,0 +1,16 @@
+flowchart TB
+    subgraph Presentation["Presentation Layer"]
+        UI[Web UI]
+    end
+    subgraph Application["Application Layer"]
+        API[Backend Services]
+    end
+    subgraph Data["Data Layer"]
+        DB[(Database)]
+    end
+    subgraph External["External Integration"]
+        EXT[APIs / Third-party]
+    end
+    UI --> API
+    API --> DB
+    API --> EXT

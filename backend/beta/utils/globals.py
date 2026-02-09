@@ -281,17 +281,22 @@ def render_mermaid_png(mermaid_code: str, output_png: Path):
         f.write(mermaid_code)
 
     css_path = Path("backend/beta/static/custom-diagram.css")
+    config_path = Path("backend/beta/static/mermaid-config.json")
 
     cmd = [
         mmdc_path,
         "-i", str(mmd_path),
         "-o", str(output_png),
-        "-w", "2400",
-        "-H", "1600",
-        "-t", "forest",
+        "-w", "2800",
+        "-H", "1800",
+        "-t", "neutral",
         "-b", "white",
-        "-s", "2"
+        "-s", "2.5"
     ]
+    if config_path.exists():
+        cmd.extend(["-c", str(config_path)])
+    if css_path.exists():
+        cmd.extend(["-C", str(css_path)])
 
 
     try:

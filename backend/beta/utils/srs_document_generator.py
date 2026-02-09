@@ -28,27 +28,35 @@ class SRSDocumentGenerator:
             authors: List of document author names (default: ["Author Name"])
             organization: Organization name (default: "Organization Name")
         """
-        self.project_name = project_name
-        self.authors = authors if authors else ["Author Name"]
-        self.organization = organization
+        self.project_name = str(project_name or "Project")
+        self.authors = [str(a) for a in (authors or ["Author Name"])]
+        self.organization = str(organization or "Organization Name")
         self.doc = Document()
         self.image_paths = {}  # set before adding sections; may include system_context, system_architecture, use_case, user_workflow, security_flow, data_erd
         self._setup_document()
         self._setup_styles()
+
+    def _apply_section_layout(self, section):
+        """Apply consistent page geometry to a single section."""
+        section.left_margin = Inches(1.0)
+        section.right_margin = Inches(1.0)
+        section.top_margin = Inches(1.0)
+        section.bottom_margin = Inches(1.0)
+        section.header_distance = Inches(0.5)
+        section.footer_distance = Inches(0.5)
+        section.page_width = Inches(8.5)
+        section.page_height = Inches(11)
+
+    def _apply_layout_to_all_sections(self):
+        """Ensure every section (all pages) uses consistent layout."""
+        for section in self.doc.sections:
+            self._apply_section_layout(section)
         
     def _setup_document(self):
         """Configure document-level settings (margins, page size)."""
         sections = self.doc.sections
         for section in sections:
-            # Set margins: 1.25" left, 1" top/right/bottom
-            section.left_margin = Inches(1.25)
-            section.right_margin = Inches(1.0)
-            section.top_margin = Inches(1.0)
-            section.bottom_margin = Inches(1.0)
-            
-            # Set page size to US Letter
-            section.page_width = Inches(8.5)
-            section.page_height = Inches(11)
+            self._apply_section_layout(section)
             
     def _setup_styles(self):
         """Set up custom styles for the document."""
@@ -58,7 +66,10 @@ class SRSDocumentGenerator:
         normal_style = styles['Normal']
         normal_font = normal_style.font
         normal_font.name = 'Arial'
-        normal_font.size = Pt(12)
+        normal_font.size = Pt(11)
+        normal_style.paragraph_format.line_spacing = 1.25
+        normal_style.paragraph_format.space_after = Pt(8)
+        normal_style.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         
         # Heading 1 style
         try:
@@ -69,9 +80,10 @@ class SRSDocumentGenerator:
         h1_font.name = 'Arial'
         h1_font.size = Pt(16)
         h1_font.bold = True
-        h1_font.color.rgb = RGBColor(0, 0, 0)
+        h1_font.color.rgb = RGBColor(15, 63, 102)
         h1_style.paragraph_format.space_before = Pt(24)
         h1_style.paragraph_format.space_after = Pt(12)
+        h1_style.paragraph_format.keep_with_next = True
         
         # Heading 2 style
         try:
@@ -80,11 +92,12 @@ class SRSDocumentGenerator:
             h2_style = styles.add_style('Heading 2', WD_STYLE_TYPE.PARAGRAPH)
         h2_font = h2_style.font
         h2_font.name = 'Arial'
-        h2_font.size = Pt(14)
+        h2_font.size = Pt(13)
         h2_font.bold = True
-        h2_font.color.rgb = RGBColor(0, 0, 0)
-        h2_style.paragraph_format.space_before = Pt(18)
+        h2_font.color.rgb = RGBColor(20, 20, 20)
+        h2_style.paragraph_format.space_before = Pt(14)
         h2_style.paragraph_format.space_after = Pt(9)
+        h2_style.paragraph_format.keep_with_next = True
         
         # Heading 3 style
         try:
@@ -93,11 +106,12 @@ class SRSDocumentGenerator:
             h3_style = styles.add_style('Heading 3', WD_STYLE_TYPE.PARAGRAPH)
         h3_font = h3_style.font
         h3_font.name = 'Arial'
-        h3_font.size = Pt(13)
+        h3_font.size = Pt(12)
         h3_font.bold = True
         h3_font.color.rgb = RGBColor(0, 0, 0)
         h3_style.paragraph_format.space_before = Pt(12)
         h3_style.paragraph_format.space_after = Pt(6)
+        h3_style.paragraph_format.keep_with_next = True
         
         # TOC Heading style
         try:
@@ -106,13 +120,76 @@ class SRSDocumentGenerator:
             toc_heading_style = styles.add_style('TOC Heading', WD_STYLE_TYPE.PARAGRAPH)
         toc_heading_font = toc_heading_style.font
         toc_heading_font.name = 'Arial'
-        toc_heading_font.size = Pt(16)
+        toc_heading_font.size = Pt(15)
         toc_heading_font.bold = True
-        toc_heading_font.color.rgb = RGBColor(0, 0, 0)
+        toc_heading_font.color.rgb = RGBColor(15, 63, 102)
         toc_heading_style.paragraph_format.space_before = Pt(24)
         toc_heading_style.paragraph_format.space_after = Pt(12)
         toc_heading_style.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        # Figure caption style
+        try:
+            caption_style = styles['Caption']
+        except KeyError:
+            caption_style = styles.add_style('Caption', WD_STYLE_TYPE.PARAGRAPH)
+        caption_font = caption_style.font
+        caption_font.name = 'Arial'
+        caption_font.size = Pt(10)
+        caption_font.italic = True
+        caption_font.color.rgb = RGBColor(80, 80, 80)
+        caption_style.paragraph_format.space_before = Pt(4)
+        caption_style.paragraph_format.space_after = Pt(10)
+        caption_style.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        # List bullet style cleanup for consistent indentation
+        try:
+            bullet_style = styles['List Bullet']
+            bullet_style.paragraph_format.left_indent = Inches(0.25)
+            bullet_style.paragraph_format.first_line_indent = Inches(-0.15)
+            bullet_style.paragraph_format.space_after = Pt(4)
+        except KeyError:
+            pass
+
+    def _add_figure(self, path: Path, caption: str, width: float = 5.8):
+        """Insert a centered figure with a consistent caption style."""
+        self.doc.add_picture(str(path), width=Inches(width))
+        image_para = self.doc.paragraphs[-1]
+        image_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        caption_para = self.doc.add_paragraph()
+        caption_para.style = 'Caption'
+        run = caption_para.add_run(caption)
+        run.font.name = 'Arial'
+        run.font.size = Pt(10)
+        run.italic = True
         
+    def _add_visual_grid(self, items, columns: int = 2, image_width: float = 2.8):
+        """Insert a compact grid of figures with captions."""
+        if not items:
+            return
+        rows = (len(items) + columns - 1) // columns
+        table = self.doc.add_table(rows=rows, cols=columns)
+        table.autofit = True
+        idx = 0
+        for r in range(rows):
+            for c in range(columns):
+                cell = table.cell(r, c)
+                cell.text = ""
+                if idx >= len(items):
+                    continue
+                path, caption = items[idx]
+                para = cell.paragraphs[0] if cell.paragraphs else cell.add_paragraph()
+                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                if path and Path(path).exists():
+                    run = para.add_run()
+                    run.add_picture(str(path), width=Inches(image_width))
+                    cap = cell.add_paragraph(caption)
+                    cap.style = "Caption"
+                else:
+                    placeholder = cell.add_paragraph(caption)
+                    placeholder.style = "Caption"
+                idx += 1
+
     def _add_header_footer(self):
         """Add header and footer to all pages including title and TOC."""
         # Get all sections
@@ -120,24 +197,37 @@ class SRSDocumentGenerator:
         
         # Configure all sections (including title and TOC)
         for idx, section in enumerate(sections):
+            # Keep front matter (title + TOC) clean
+            if idx < 2:
+                continue
+
             # Header - add to ALL pages
             header = section.header
             header_para = header.paragraphs[0] if header.paragraphs else header.add_paragraph()
-            header_para.text = f"SRS for {self.project_name}"
+            header_para.text = f"{self.project_name} | Software Requirements Specification"
             header_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
             if header_para.runs:
                 header_para.runs[0].font.size = Pt(10)
                 header_para.runs[0].font.name = 'Arial'
+                header_para.runs[0].font.color.rgb = RGBColor(102, 102, 102)
             
             # Footer with page number - add to ALL pages
             footer = section.footer
             footer_para = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
             footer_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
             
-            # Clear existing content
-            footer_para.clear()
+            # Clear existing content in a version-safe way.
+            # Some python-docx versions do not expose Paragraph.clear().
+            if hasattr(footer_para, "clear"):
+                footer_para.clear()
+            else:
+                para_element = footer_para._element
+                for child in list(para_element):
+                    para_element.remove(child)
             
-            # Add page number field
+            # Add "Page X of Y" fields
+            footer_para.add_run("Page ").font.name = 'Arial'
+
             run = footer_para.add_run()
             fldChar1 = OxmlElement('w:fldChar')
             fldChar1.set(qn('w:fldCharType'), 'begin')
@@ -154,47 +244,111 @@ class SRSDocumentGenerator:
             run._r.append(fldChar2)
             run.font.size = Pt(10)
             run.font.name = 'Arial'
+            run.font.color.rgb = RGBColor(102, 102, 102)
+
+            footer_para.add_run(" of ").font.name = 'Arial'
+
+            run_total = footer_para.add_run()
+            total_fld_begin = OxmlElement('w:fldChar')
+            total_fld_begin.set(qn('w:fldCharType'), 'begin')
+            total_instr = OxmlElement('w:instrText')
+            total_instr.set(qn('xml:space'), 'preserve')
+            total_instr.text = "NUMPAGES"
+            total_fld_end = OxmlElement('w:fldChar')
+            total_fld_end.set(qn('w:fldCharType'), 'end')
+            run_total._r.append(total_fld_begin)
+            run_total._r.append(total_instr)
+            run_total._r.append(total_fld_end)
+            run_total.font.size = Pt(10)
+            run_total.font.name = 'Arial'
+            run_total.font.color.rgb = RGBColor(102, 102, 102)
+
+    def _add_horizontal_rule(self):
+        line = self.doc.add_paragraph()
+        line.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = line.add_run("".ljust(90, "_"))
+        run.font.name = 'Arial'
+        run.font.size = Pt(9)
+        run.font.color.rgb = RGBColor(170, 170, 170)
+
+    def _insert_toc_field(self):
+        """Insert an automatic TOC field that Word can update on open."""
+        paragraph = self.doc.add_paragraph()
+        run = paragraph.add_run()
+
+        fld_char_begin = OxmlElement('w:fldChar')
+        fld_char_begin.set(qn('w:fldCharType'), 'begin')
+        instr_text = OxmlElement('w:instrText')
+        instr_text.set(qn('xml:space'), 'preserve')
+        instr_text.text = r'TOC \o "1-3" \h \z \u'
+        fld_char_sep = OxmlElement('w:fldChar')
+        fld_char_sep.set(qn('w:fldCharType'), 'separate')
+        text = OxmlElement('w:t')
+        text.text = "Right-click and update field to generate Table of Contents."
+        fld_char_end = OxmlElement('w:fldChar')
+        fld_char_end.set(qn('w:fldCharType'), 'end')
+
+        run._r.append(fld_char_begin)
+        run._r.append(instr_text)
+        run._r.append(fld_char_sep)
+        run._r.append(text)
+        run._r.append(fld_char_end)
         
     def _add_title_page(self):
         """Add title page for the SRS document."""
+        from datetime import datetime
+
+        self.doc.add_paragraph()
+        self._add_horizontal_rule()
+
+        # Document type
+        doc_type = self.doc.add_paragraph()
+        doc_type.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = doc_type.add_run("SOFTWARE REQUIREMENTS SPECIFICATION")
+        run.font.name = 'Arial'
+        run.font.size = Pt(22)
+        run.font.bold = True
+        run.font.color.rgb = RGBColor(15, 63, 102)
+        doc_type.paragraph_format.space_before = Pt(72)
+        doc_type.paragraph_format.space_after = Pt(24)
+
+        # Subtitle
+        subtitle = self.doc.add_paragraph()
+        subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = subtitle.add_run("Prepared in IEEE 830 style")
+        run.font.name = 'Arial'
+        run.font.size = Pt(12)
+        run.font.italic = True
+        run.font.color.rgb = RGBColor(96, 96, 96)
+        subtitle.paragraph_format.space_after = Pt(28)
+
         # Title
         title = self.doc.add_paragraph()
         title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = title.add_run("Software Requirements Specification")
+        run = title.add_run(self.project_name)
         run.font.name = 'Arial'
-        run.font.size = Pt(20)
+        run.font.size = Pt(18)
         run.font.bold = True
+        run.font.color.rgb = RGBColor(25, 25, 25)
         
         # Add spacing
-        title.paragraph_format.space_after = Pt(12)
-        
-        # "for" text
-        for_text = self.doc.add_paragraph()
-        for_text.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = for_text.add_run("for")
+        title.paragraph_format.space_after = Pt(44)
+
+        meta_heading = self.doc.add_paragraph()
+        meta_heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = meta_heading.add_run("Document Information")
         run.font.name = 'Arial'
-        run.font.size = Pt(16)
+        run.font.size = Pt(12)
         run.font.bold = True
-        
-        for_text.paragraph_format.space_after = Pt(12)
-        
-        # Project name
-        project = self.doc.add_paragraph()
-        project.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = project.add_run(self.project_name)
-        run.font.name = 'Arial'
-        run.font.size = Pt(20)
-        run.font.bold = True
-        
-        project.paragraph_format.space_after = Pt(36)
-        
-        # Prepared by - format authors list
+        run.font.color.rgb = RGBColor(15, 63, 102)
+        meta_heading.paragraph_format.space_after = Pt(16)
+
         prepared_by = self.doc.add_paragraph()
         prepared_by.alignment = WD_ALIGN_PARAGRAPH.CENTER
         authors_text = ", ".join(self.authors)
-        run = prepared_by.add_run(f"Prepared by {authors_text}")
+        run = prepared_by.add_run(f"Prepared by: {authors_text}")
         run.font.name = 'Arial'
-        run.font.size = Pt(14)
+        run.font.size = Pt(12)
         
         prepared_by.paragraph_format.space_after = Pt(12)
         
@@ -203,24 +357,55 @@ class SRSDocumentGenerator:
         organization.alignment = WD_ALIGN_PARAGRAPH.CENTER
         run = organization.add_run(f"Organization: {self.organization}")
         run.font.name = 'Arial'
-        run.font.size = Pt(14)
+        run.font.size = Pt(12)
         
         organization.paragraph_format.space_after = Pt(12)
+
+        version = self.doc.add_paragraph()
+        version.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = version.add_run("Version: 1.0")
+        run.font.name = 'Arial'
+        run.font.size = Pt(12)
+        version.paragraph_format.space_after = Pt(12)
         
         # Date created
-        from datetime import datetime
         date_created = self.doc.add_paragraph()
         date_created.alignment = WD_ALIGN_PARAGRAPH.CENTER
         today_date = datetime.now().strftime("%m/%d/%Y")
         run = date_created.add_run(f"Date Created: {today_date}")
         run.font.name = 'Arial'
-        run.font.size = Pt(14)
+        run.font.size = Pt(12)
+        date_created.paragraph_format.space_after = Pt(26)
+
+        # Document control table for enterprise formatting
+        control_table = self.doc.add_table(rows=3, cols=2)
+        control_table.style = 'Table Grid'
+        control_table.autofit = True
+        control_rows = [
+            ("Document ID", f"SRS-{self.project_name[:20].upper().replace(' ', '-')}-001"),
+            ("Document Status", "Draft"),
+            ("Prepared For", self.organization),
+        ]
+        for i, (k, v) in enumerate(control_rows):
+            c0 = control_table.cell(i, 0)
+            c1 = control_table.cell(i, 1)
+            c0.text = k
+            c1.text = v
+            if c0.paragraphs and c0.paragraphs[0].runs:
+                c0.paragraphs[0].runs[0].bold = True
+                c0.paragraphs[0].runs[0].font.name = 'Arial'
+                c0.paragraphs[0].runs[0].font.size = Pt(10)
+            if c1.paragraphs and c1.paragraphs[0].runs:
+                c1.paragraphs[0].runs[0].font.name = 'Arial'
+                c1.paragraphs[0].runs[0].font.size = Pt(10)
+
+        self._add_horizontal_rule()
         
         # Add section break (new page) after title page
         self.doc.add_section()
     
     def _add_table_of_contents(self):
-        """Add Table of Contents after the title page. Static list visible in any viewer."""
+        """Add Table of Contents after the title page."""
         toc_heading = self.doc.add_paragraph()
         toc_heading.style = 'TOC Heading'
         run = toc_heading.add_run("Table of Contents")
@@ -229,56 +414,21 @@ class SRSDocumentGenerator:
         run.font.bold = True
         toc_heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
         toc_heading.paragraph_format.space_after = Pt(18)
+        self._insert_toc_field()
 
-        # Proper SRS structure (IEEE-style) with diagram placeholders
-        toc_entries = [
-            "1. Introduction",
-            "    1.1 Purpose",
-            "    1.2 Scope of the System",
-            "    1.3 Definitions, Acronyms, and Abbreviations",
-            "2. Overall Description",
-            "    2.1 Product Perspective (System Context Diagram)",
-            "    2.2 Product Functions",
-            "    2.3 User Classes and Characteristics",
-            "    2.4 Operating Environment",
-            "    2.5 Design and Implementation Constraints",
-            "3. System Architecture (Architecture Diagram)",
-            "4. Functional Requirements (Use Case Diagram)",
-            "5. User Workflow (Workflow Diagram)",
-            "6. Non-Functional Requirements",
-            "7. Security Requirements (Security Flow Diagram)",
-            "8. Data Requirements (Entity Relationship Diagram)",
-            "9. External Interface Requirements",
-            "    9.1 User Interface",
-            "    9.2 Application Programming Interfaces",
-            "10. Assumptions and Dependencies",
-            "11. Future Enhancements",
-        ]
-        for entry in toc_entries:
-            p = self.doc.add_paragraph(entry)
-            p.style = 'Normal'
-            p.paragraph_format.left_indent = Pt(0 if not entry.startswith("    ") else 24)
-            p.paragraph_format.space_before = Pt(3)
-            p.paragraph_format.space_after = Pt(3)
-            for r in p.runs:
-                r.font.name = 'Arial'
-                r.font.size = Pt(11)
-
-        # Optional: in Word, right-click and "Update Field" on a TOC field for page numbers
         note = self.doc.add_paragraph()
-        note_run = note.add_run(
-            "In Microsoft Word you can insert an automatic TOC (References → Table of Contents) for page numbers."
-        )
+        note.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        note_run = note.add_run("Open in Microsoft Word and use 'Update Field' to refresh page numbers.")
         note_run.font.italic = True
         note_run.font.size = Pt(9)
         note_run.font.color.rgb = RGBColor(128, 128, 128)
-        note.paragraph_format.space_before = Pt(12)
-        note.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        note.paragraph_format.space_before = Pt(10)
 
         # Section break (new page) after TOC
         new_section = self.doc.add_section()
         new_section.start_type = 2
-        new_section.page_number_start = 1
+        # page_number_start is not available in all python-docx versions.
+        # Skip hard assignment to avoid generation crashes.
     
     def _set_update_fields_on_open(self):
         """Set the document to update fields when opened."""
@@ -432,10 +582,10 @@ class SRSDocumentGenerator:
         self.doc.add_paragraph(perspective.get('description', ''))
         path = self.image_paths.get('system_context')
         if path and Path(path).exists():
-            self.doc.add_picture(str(path), width=Inches(5.5))
-            last_paragraph = self.doc.paragraphs[-1]
-            last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            self.doc.add_paragraph("The System Context Diagram illustrating interactions between the system and external entities has been included above.", style='Heading 3')
+            self._add_figure(
+                Path(path),
+                "Figure 1: System Context Diagram",
+            )
         else:
             self.doc.add_paragraph("Note: The System Context Diagram illustrating interactions between the system and external entities can be added above.", style='Heading 3')
         
@@ -500,10 +650,10 @@ class SRSDocumentGenerator:
         )
         path = self.image_paths.get('system_architecture')
         if path and Path(path).exists():
-            self.doc.add_picture(str(path), width=Inches(5.5))
-            last_paragraph = self.doc.paragraphs[-1]
-            last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            self.doc.add_paragraph("The System Architecture Diagram showing component interactions has been included above.", style='Heading 3')
+            self._add_figure(
+                Path(path),
+                "Figure 2: System Architecture Diagram",
+            )
         else:
             self.doc.add_paragraph("Note: The System Architecture Diagram can be included above.", style='Heading 3')
     
@@ -514,10 +664,10 @@ class SRSDocumentGenerator:
         self.doc.add_heading('4. Functional Requirements', level=1)
         path = self.image_paths.get('use_case')
         if path and Path(path).exists():
-            self.doc.add_picture(str(path), width=Inches(5.5))
-            last_paragraph = self.doc.paragraphs[-1]
-            last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            self.doc.add_paragraph("The Use Case Diagram representing functional interactions between users and the system has been added above.", style='Heading 3')
+            self._add_figure(
+                Path(path),
+                "Figure 3: Use Case Diagram",
+            )
         features = features_data.get('features', [])
         for idx, feature in enumerate(features, 1):
             feature_name = feature.get('feature_name', f'Feature {idx}')
@@ -541,12 +691,25 @@ class SRSDocumentGenerator:
         )
         path = self.image_paths.get('user_workflow')
         if path and Path(path).exists():
-            self.doc.add_picture(str(path), width=Inches(5.5))
-            last_paragraph = self.doc.paragraphs[-1]
-            last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            self.doc.add_paragraph("The User Flow / Workflow Diagram illustrating these steps has been included above.", style='Heading 3')
+            self._add_figure(
+                Path(path),
+                "Figure 4: User Workflow Diagram",
+            )
         else:
             self.doc.add_paragraph("Note: The User Flow / Workflow Diagram can be included above.", style='Heading 3')
+
+    def add_visual_overview_section(self):
+        """A compact, diagram-heavy overview similar to enterprise SRS samples."""
+        self.doc.add_heading("Visual Overview", level=1)
+        items = [
+            (self.image_paths.get("system_context"), "Figure A1: System Context"),
+            (self.image_paths.get("system_architecture"), "Figure A2: System Architecture"),
+            (self.image_paths.get("use_case"), "Figure A3: Use Case Diagram"),
+            (self.image_paths.get("user_workflow"), "Figure A4: User Workflow"),
+            (self.image_paths.get("security_flow"), "Figure A5: Security Flow"),
+            (self.image_paths.get("data_erd"), "Figure A6: Data ERD"),
+        ]
+        self._add_visual_grid(items, columns=2, image_width=2.9)
     
     def add_external_interfaces_section(
         self, 
@@ -570,10 +733,11 @@ class SRSDocumentGenerator:
         
         # Add user interface diagram
         if 'user_interfaces' in image_paths and image_paths['user_interfaces'] and Path(image_paths['user_interfaces']).exists():
-            self.doc.add_paragraph("User Interface Architecture:", style='Heading 3')
-            self.doc.add_picture(str(image_paths['user_interfaces']), width=Inches(6.0))
-            last_paragraph = self.doc.paragraphs[-1]
-            last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            self._add_figure(
+                Path(image_paths['user_interfaces']),
+                "Figure 7: User Interface Diagram",
+                width=6.0,
+            )
         
         # 9.2 Hardware / Software / Communication (grouped)
         hardware_interfaces = interfaces_data.get('hardware_interfaces', {})
@@ -582,17 +746,19 @@ class SRSDocumentGenerator:
         
         # Add hardware interface diagram
         if 'hardware_interfaces' in image_paths and image_paths['hardware_interfaces'] and Path(image_paths['hardware_interfaces']).exists():
-            self.doc.add_paragraph("Hardware Interface Architecture:", style='Heading 3')
-            self.doc.add_picture(str(image_paths['hardware_interfaces']), width=Inches(6.0))
-            last_paragraph = self.doc.paragraphs[-1]
-            last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            self._add_figure(
+                Path(image_paths['hardware_interfaces']),
+                "Figure 8: Hardware Interface Diagram",
+                width=6.0,
+            )
         
         # Optional: software/communication diagrams if provided
         if 'software_interfaces' in image_paths and image_paths['software_interfaces'] and Path(image_paths['software_interfaces']).exists():
-            self.doc.add_paragraph("Software / API architecture:", style='Heading 3')
-            self.doc.add_picture(str(image_paths['software_interfaces']), width=Inches(5.0))
-            last_paragraph = self.doc.paragraphs[-1]
-            last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            self._add_figure(
+                Path(image_paths['software_interfaces']),
+                "Figure 9: Software/API Interface Diagram",
+                width=5.5,
+            )
         communication_interfaces = interfaces_data.get('communication_interfaces', {})
         self.doc.add_paragraph(communication_interfaces.get('description', 'REST-based APIs for data communication. Secure API access controls.'))
     
@@ -659,10 +825,10 @@ class SRSDocumentGenerator:
         )
         path = self.image_paths.get('security_flow')
         if path and Path(path).exists():
-            self.doc.add_picture(str(path), width=Inches(5.5))
-            last_paragraph = self.doc.paragraphs[-1]
-            last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            self.doc.add_paragraph("The Security Flow Diagram illustrating authentication and authorization has been included above.", style='Heading 3')
+            self._add_figure(
+                Path(path),
+                "Figure 5: Security Flow Diagram",
+            )
         else:
             self.doc.add_paragraph("Note: The Security Flow Diagram can be included above.", style='Heading 3')
     
@@ -672,10 +838,10 @@ class SRSDocumentGenerator:
         self.doc.add_paragraph("The system shall manage structured data entities and their relationships efficiently.")
         path = self.image_paths.get('data_erd')
         if path and Path(path).exists():
-            self.doc.add_picture(str(path), width=Inches(5.5))
-            last_paragraph = self.doc.paragraphs[-1]
-            last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            self.doc.add_paragraph("The Database / Entity Relationship Diagram (ERD) representing data structure and relationships has been included above.", style='Heading 3')
+            self._add_figure(
+                Path(path),
+                "Figure 6: Entity Relationship Diagram",
+            )
         else:
             self.doc.add_paragraph("Note: The Entity Relationship Diagram can be included above.", style='Heading 3')
     
@@ -802,7 +968,10 @@ def generate_srs_document(
     
     # Add Table of Contents
     generator._add_table_of_contents()
-    
+
+    # Add a diagram-heavy visual overview to match enterprise SRS samples
+    generator.add_visual_overview_section()
+
     # Add all sections (proper SRS structure 1–11 with diagram placeholders)
     generator.add_introduction_section(introduction_section)
     generator.add_feasibility_section() # Added Feasibility
@@ -818,7 +987,9 @@ def generate_srs_document(
     generator.add_future_enhancements_section()
     
     # Add header and footer (must be after all content is added)
+    generator._apply_layout_to_all_sections()
     generator._add_header_footer()
+    generator._set_update_fields_on_open()
     
     # Save the document
     generator.save(output_path)

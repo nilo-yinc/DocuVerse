@@ -7,6 +7,9 @@ if not exist "node_modules" (
     echo Installing dependencies...
     npm install
 )
+echo Launching Python Backend (FastAPI)...
+start "DocuVerse Python Backend" cmd /k "call ..\venv\Scripts\activate && uvicorn backend.beta.main:app --reload --port 8000"
+
 echo Launching Node.js...
 node server.js
 if errorlevel 1 (
