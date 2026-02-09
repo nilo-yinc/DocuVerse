@@ -3,7 +3,8 @@
 <div align="center">
 
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
-![FastAPI](https://img.shields.io/badge/FastAPI-latest-green.svg)
+<img width="1916" height="935" alt="image" src="https://github.com/user-attachments/assets/a490071e-427d-4352-89b3-25172f453bce" />
+
 ![Gemini](https://img.shields.io/badge/Gemini-Pro-orange.svg)
 
 **AI-powered automated Software Requirements Specification (SRS) document generator with architecture diagrams**
