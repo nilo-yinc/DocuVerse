@@ -3,7 +3,7 @@
 <div align="center">
 
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
-<img width="1916" height="935" alt="image" src="https://github.com/user-attachments/assets/a490071e-427d-4352-89b3-25172f453bce" />
+![FastAPI](https://img.shields.io/badge/FastAPI-latest-green.svg)
 
 ![Gemini](https://img.shields.io/badge/Gemini-Pro-orange.svg)
 
@@ -31,7 +31,8 @@ An intelligent multi-agent system that automates SRS creation using **Google Gem
 ## 📸 Screenshots
 
 <img width="450" height="946" alt="image" src="https://github.com/user-attachments/assets/0996958c-390c-4ac2-b027-33b867c68641" />
-<img width="450" height="946" alt="image" src="https://github.com/user-attachments/assets/5be14a4c-3aa5-40ae-8c64-1ee51449b7ce" />
+<img width="1916" height="935" alt="image" src="https://github.com/user-attachments/assets/3dd14274-f827-42b9-949f-3e7c58bca7e4" />
+
 
 <img width="1904" height="1031" alt="Screenshot 2026-02-09 095326" src="https://github.com/user-attachments/assets/2423ad7d-cbb3-4784-834f-f3b40da7b15c" />
 
