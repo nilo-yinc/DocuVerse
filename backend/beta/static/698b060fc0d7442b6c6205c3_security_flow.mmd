@@ -1,0 +1,13 @@
+flowchart LR
+    U([Client/User]) --> A[Submit credentials]
+    A --> B{Identity verified?}
+    B -->|No| C[Reject & throttle]
+    B -->|Yes| D[Issue token/session]
+    D --> E[Attach token to request]
+    E --> F{Authorized role/policy?}
+    F -->|No| G[Block action & audit]
+    F -->|Yes| H[Permit operation]
+    H --> I[Validate payload]
+    I --> J[Standard Data Protection]
+    J --> K[Write immutable audit trail]
+    K --> L([Success response])
