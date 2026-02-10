@@ -1,0 +1,29 @@
+flowchart TB
+    subgraph Presentation["Presentation Layer (Web)"]
+        UI[User Interface]
+        BFF[Client Gateway]
+    end
+    subgraph Application["Application Layer"]
+        API[N/A]
+        AUTH[Auth & Access Control]
+        CORE[Core Services]
+    end
+    subgraph Data["Data Layer"]
+        DB[(N/A)]
+        CACHE[(Cache/Session Store)]
+        AUDIT[(Audit Logs)]
+    end
+    subgraph External["External Integration (N/A)"]
+        EXT[Third-party APIs]
+        OBS[Monitoring & Alerts]
+    end
+    UI --> BFF
+    BFF --> API
+    API --> AUTH
+    API --> CORE
+    CORE --> DB
+    CORE --> CACHE
+    AUTH --> DB
+    CORE --> AUDIT
+    CORE <-->|REST/Events| EXT
+    CORE --> OBS
