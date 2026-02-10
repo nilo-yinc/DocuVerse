@@ -1,0 +1,49 @@
+erDiagram
+    USER ||--o{ SESSION : has
+    USER ||--o{ ROLE_ASSIGNMENT : mapped_to
+    ROLE ||--o{ ROLE_ASSIGNMENT : grants
+    USER ||--o{ TRANSACTION : performs
+    TRANSACTION ||--o{ AUDIT_LOG : records
+    ENTITY ||--o{ TRANSACTION : changes
+    USER {
+        int id PK
+        string name
+        string email
+        string status
+    }
+    SESSION {
+        int id PK
+        int user_id FK
+        string token_hash
+        datetime created_at
+        datetime expires_at
+    }
+    ROLE_ASSIGNMENT {
+        int id PK
+        int user_id FK
+        int role_id FK
+    }
+    ROLE {
+        int id PK
+        string name
+        string permission_set
+    }
+    ENTITY {
+        int id PK
+        string entity_type
+        string reference_code
+        datetime updated_at
+    }
+    TRANSACTION {
+        int id PK
+        int user_id FK
+        int entity_id FK
+        string action
+        datetime created_at
+    }
+    AUDIT_LOG {
+        int id PK
+        int transaction_id FK
+        string event_type
+        datetime timestamp
+    }
