@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request, HTTPException, BackgroundTasks, Query, UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -137,6 +138,13 @@ import threading
 today = datetime.today().strftime("%m/%d/%Y")
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 SRS_PROGRESS = {}
 SRS_PROGRESS_LOCK = threading.Lock()
@@ -321,8 +329,6 @@ def _try_fast_litellm_json(prompt: str) -> dict:
             model_candidates.append(GROQ_MODEL)
         # Fast Groq defaults
         model_candidates.extend([
-            "meta-llama/llama-4-scout-17b-16e-instruct",
-            "meta-llama/llama-4-maverick-17b-128e-instruct",
             "groq/llama-3.1-8b-instant",
             "groq/llama-3.3-70b-versatile",
         ])
@@ -815,7 +821,14 @@ async def generate_srs(
 ):
     inputs = srs_data.dict()
     project_name = inputs["project_identity"]["project_name"]
-    project_key = _safe_project_key(project_name)
+    # If project_id is provided from Node.js, use it as the stable key for files & progress.
+    # This prevents creating multiple files for the same project during regeneration.
+    project_id = inputs["project_identity"].get("project_id")
+    if project_id:
+        project_key = str(project_id)
+    else:
+        project_key = _safe_project_key(project_name)
+    
     _ensure_output_dir()
     image_paths = _build_image_paths(project_key)
     _set_progress(project_key, "init", 5, "Initializing generation...")
@@ -1224,9 +1237,15 @@ from backend.beta.services.project_store import ProjectStore
 import uuid
 
 class CreateProjectRequest(BaseModel):
+    id: Optional[str] = None
     name: str
     content: str
     documentUrl: Optional[str] = None
+    status: Optional[str] = None
+    reviewedDocumentUrl: Optional[str] = None
+    clientEmail: Optional[str] = None
+    workflowEvents: Optional[list] = None
+    reviewFeedback: Optional[list] = None
 
 class ReviewRequest(BaseModel):
     projectId: str
@@ -1236,6 +1255,7 @@ class ReviewRequest(BaseModel):
     projectName: Optional[str] = None
     insights: Optional[list] = None
     notes: Optional[str] = None
+    isUpdate: Optional[bool] = False
 
 class WebhookCallbackRequest(BaseModel):
     projectId: str
@@ -1244,13 +1264,23 @@ class WebhookCallbackRequest(BaseModel):
 
 @app.post("/api/project/create")
 async def create_project(request: CreateProjectRequest):
-    project_id = str(uuid.uuid4())
+    project_id = request.id or str(uuid.uuid4())
     project = Project(
         id=project_id,
         name=request.name,
         contentMarkdown=request.content,
         documentUrl=request.documentUrl
     )
+    if request.status:
+        project.status = request.status
+    if request.reviewedDocumentUrl:
+        project.reviewedDocumentUrl = request.reviewedDocumentUrl
+    if request.clientEmail:
+        project.clientEmail = request.clientEmail
+    if request.workflowEvents:
+        project.workflowEvents = request.workflowEvents
+    if request.reviewFeedback:
+        project.reviewFeedback = request.reviewFeedback
     ProjectStore.save_project(project)
     return JSONResponse(content={"id": project_id, "message": "Project created successfully"})
 
@@ -1263,9 +1293,11 @@ async def get_project(project_id: str):
 
 @app.post("/api/workflow/start-review")
 async def start_review(request: ReviewRequest):
+    print(f"DEBUG: start_review triggered for project: {request.projectId}")
     project = ProjectStore.get_project(request.projectId)
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        print(f"ERROR: Project {request.projectId} not found in store!")
+        raise HTTPException(status_code=404, detail="Project not found in Python backend store")
 
     # Update Status
     ProjectStore.update_status(project.id, "IN_REVIEW")
@@ -1296,33 +1328,44 @@ async def start_review(request: ReviewRequest):
             lines.append(f"- {title}: {desc}")
         insights_block = "\nInsights:\n" + "\n".join(lines)
 
+    update_line = "This is a revised version of the document based on previous feedback." if request.isUpdate else "A new SRS document has been generated and is ready for your technical review."
     body = f"""Hello,
 
-You have been invited to review the SRS for: {project_title}
+You have been invited to review the Software Requirements Specification (SRS) for: {project_title}
+
+Identifying Tag: [TECHNICAL REVIEW STAGE]
 
 Document link: {doc_link}
 {insights_block}
 
-Notes:
+Additonal Notes:
 {notes or "No additional notes provided."}
 
-Please reply to this email with your review comments.
+{update_line}
+
+Please use the buttons below in the HTML version of this email to Approve or Request Changes.
 """
 
     warning = None
     try:
         send_review_email(
             to_email=request.clientEmail,
-            subject=f"DocuVerse Review: {project_title}",
+            subject=f"[Action Required] DocuVerse Review{' Update' if request.isUpdate else ''}: {project_title}",
             body=body,
             reply_to=sender,
             document_link=doc_link,
             project_id=project.id,
-            review_token=project.reviewToken
+            review_token=project.reviewToken,
+            is_update=request.isUpdate
         )
     except Exception as e:
+        import traceback
         warning = str(e)
+        full_error = traceback.format_exc()
         print(f"Email send failed: {warning}")
+        print(full_error)
+        # return fuller error for debug if needed
+        # response["debug_error"] = full_error 
 
     response = {
         "status": "IN_REVIEW",
@@ -1334,9 +1377,11 @@ Please reply to this email with your review comments.
 
 @app.post("/api/workflow/resend-review")
 async def resend_review(request: ReviewRequest):
+    print(f"DEBUG: resend_review triggered for project: {request.projectId}")
     project = ProjectStore.get_project(request.projectId)
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        print(f"ERROR: Project {request.projectId} not found in store!")
+        raise HTTPException(status_code=404, detail="Project not found in Python backend store")
 
     ProjectStore.update_status(project.id, "IN_REVIEW")
     project.clientEmail = request.clientEmail
@@ -1368,27 +1413,30 @@ async def resend_review(request: ReviewRequest):
 
     body = f"""Hello,
 
-Updated review requested for: {project_title}
+An updated review has been requested for the Software Requirements Specification (SRS) for: {project_title}
+
+Identifying Tag: [RE-REVIEW STAGE]
 
 Document link: {doc_link}
 {insights_block}
 
-Notes:
+Additonal Notes:
 {notes or "No additional notes provided."}
 
-Please reply to this email with your review comments.
+Please reply to this email with your review comments or use the Approve/Request Changes buttons.
 """
 
     warning = None
     try:
         send_review_email(
             to_email=request.clientEmail,
-            subject=f"DocuVerse Review Update: {project_title}",
+            subject=f"[Revised] DocuVerse Review Update: {project_title}",
             body=body,
             reply_to=sender,
             document_link=doc_link,
             project_id=project.id,
-            review_token=project.reviewToken
+            review_token=project.reviewToken,
+            is_update=True
         )
     except Exception as e:
         warning = str(e)
