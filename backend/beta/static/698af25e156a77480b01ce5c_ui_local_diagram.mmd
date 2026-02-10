@@ -1,0 +1,18 @@
+flowchart TB
+    subgraph Browser["Browser Window - Untitled Project"]
+        direction TB
+        Header["[ Logo | Navigation Menu | User Profile ]"]
+        subgraph Body["Main Content Area"]
+            direction LR
+            Sidebar["[ Dashboard | Reports | Settings ]"]
+            Content["[ Data Overview Charts | Recent Activity Table | Quick Actions ]"]
+        end
+        Footer["[ Copyright | Links | Contact ]"]
+    end
+    Header --- Body
+    Body --- Footer
+    style Browser fill:#f9f9f9,stroke:#333,stroke-width:2px,color:#000
+    style Header fill:#e1e1e1,stroke:#666,stroke-dasharray: 5 5
+    style Sidebar fill:#eee,stroke:#999
+    style Content fill:#fff,stroke:#333,stroke-width:1px
+    style Footer fill:#e1e1e1,stroke:#none
