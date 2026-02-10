@@ -5,6 +5,7 @@ import axios from 'axios';
 import ReactFlow, { Background, Controls, MiniMap, applyNodeChanges, applyEdgeChanges } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 
 // Debounce Utility
 // Debounce Utility
@@ -19,8 +20,9 @@ const useDebounce = (value, delay) => {
     return debouncedValue;
 };
 
-const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUserEmail, initialStatus = "DRAFT", initialFeedback = [], workflowEvents = [], documentUrl, initialInsights = [] }) => {
+const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUserEmail, initialStatus = "DRAFT", initialFeedback = [], workflowEvents = [], documentUrl, initialInsights = [], initialClientEmail = "", previewMode = false }) => {
     const navigate = useNavigate();
+    const { token } = useAuth();
     // --- Notebook State ---
     const [content, setContent] = useState(initialContent || "# System Requirements\n\nStart typing...");
     const debouncedContent = useDebounce(content, 1500);
@@ -32,10 +34,11 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
     const [feedback, setFeedback] = useState(initialFeedback);
     const lastFeedbackRef = useRef("");
     const lastStatusRef = useRef("");
-    const [clientEmail, setClientEmail] = useState("");
+    const [clientEmail, setClientEmail] = useState(initialClientEmail || "");
     const [workflowLoading, setWorkflowLoading] = useState(false);
     const [workflowError, setWorkflowError] = useState("");
     const [workflowMessage, setWorkflowMessage] = useState("");
+    const [workflowTimeline, setWorkflowTimeline] = useState(workflowEvents || []);
 
     // --- Chat State ---
     const [chatMessages, setChatMessages] = useState([
@@ -64,6 +67,27 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
     // --- UI State ---
     const [activeTab, setActiveTab] = useState('insights'); // 'insights' | 'chat' | 'diagram'
 
+    const nodeApiBase = import.meta.env.VITE_NODE_API_URL
+        || (typeof window !== 'undefined' ? `http://${window.location.hostname || 'localhost'}:5000` : 'http://localhost:5000');
+    const pythonApiBase = import.meta.env.VITE_PY_API_URL
+        || (typeof window !== 'undefined' ? `http://${window.location.hostname || 'localhost'}:8000` : 'http://localhost:8000');
+
+    // const emailLocked = Boolean(clientEmail) && workflowTimeline.some((event) => event.title?.toLowerCase().includes('review'));
+    const hasUpdatedDoc = workflowTimeline.some((event) =>
+        ['regenerated', 'updated'].some((word) => (event.title || '').toLowerCase().includes(word))
+    );
+
+    const syncNodeProject = async (payload) => {
+        if (!projectId || !token) return;
+        try {
+            await axios.put(`${nodeApiBase}/api/projects/${projectId}`, payload, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+        } catch (error) {
+            console.warn("Node sync failed", error);
+        }
+    };
+
     const imagePresets = [
         { id: 'arch', label: 'System Architecture' },
         { id: 'er', label: 'ER Diagram' },
@@ -90,12 +114,14 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
     };
 
     // --- Effects ---
+    // --- Insights Effect ---
     useEffect(() => {
+        if (previewMode) return;
         const analyzeNotebook = async () => {
             if (!debouncedContent.trim()) return;
             setLoadingInsights(true);
             try {
-                const res = await axios.post('/api/notebook/analyze', { content: debouncedContent });
+                const res = await axios.post(`${pythonApiBase}/api/notebook/analyze`, { content: debouncedContent });
                 if (res.data.services) {
                     setInsights(res.data.services);
                 }
@@ -106,12 +132,55 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
             }
         };
         analyzeNotebook();
-    }, [debouncedContent]);
+    }, [debouncedContent, previewMode]);
+
+    // --- Auto-save Effect ---
+    useEffect(() => {
+        if (previewMode) return;
+        const autoSave = async () => {
+            if (!projectId || projectId === 'demo' || !debouncedContent) return;
+            try {
+                await axios.put(`${nodeApiBase}/api/projects/${projectId}`, { contentMarkdown: debouncedContent }, {
+                    headers: token ? { Authorization: `Bearer ${token}` } : {}
+                });
+                await ensurePythonProject(debouncedContent);
+            } catch (error) {
+                console.error("Auto-save failed", error);
+            }
+        };
+        autoSave();
+    }, [debouncedContent, projectId, nodeApiBase, token, previewMode]);
+
+    const ensurePythonProject = async (contentOverride, options = {}) => {
+        if (!projectId) return;
+        const workflowPayload = Array.isArray(options.workflowEvents) && options.workflowEvents.length > 0
+            ? options.workflowEvents
+            : undefined;
+        const feedbackPayload = Array.isArray(options.reviewFeedback) && options.reviewFeedback.length > 0
+            ? options.reviewFeedback
+            : undefined;
+        try {
+            await axios.post(`${pythonApiBase}/api/project/create`, {
+                id: projectId,
+                name: projectName || 'DocuVerse Project',
+                content: contentOverride ?? content ?? '',
+                documentUrl: documentUrl || undefined,
+                status: options.status ?? status,
+                reviewedDocumentUrl: options.reviewedDocumentUrl,
+                clientEmail: options.clientEmail,
+                workflowEvents: workflowPayload,
+                reviewFeedback: feedbackPayload
+            });
+        } catch (error) {
+            console.warn("Python project sync failed", error);
+        }
+    };
+
 
     const refreshChatDiagramStatus = async () => {
         setChatDiagramStatusLoading(true);
         try {
-            const res = await axios.get('/api/notebook/diagram-image/status');
+            const res = await axios.get(`${pythonApiBase}/api/notebook/diagram-image/status`);
             setChatDiagramEnabled(Boolean(res.data?.enabled));
             setChatDiagramReason(res.data?.reason || "");
             return Boolean(res.data?.enabled);
@@ -127,7 +196,7 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
     const refreshChatPhotoStatus = async () => {
         setChatPhotoStatusLoading(true);
         try {
-            const res = await axios.get('/api/notebook/image/status');
+            const res = await axios.get(`${pythonApiBase}/api/notebook/image/status`);
             setChatPhotoEnabled(Boolean(res.data?.enabled));
             setChatPhotoReason(res.data?.reason || "");
             return Boolean(res.data?.enabled);
@@ -141,9 +210,10 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
     };
 
     useEffect(() => {
+        if (previewMode) return;
         refreshChatDiagramStatus();
         refreshChatPhotoStatus();
-    }, []);
+    }, [previewMode]);
 
     useEffect(() => {
         if (initialStatus !== lastStatusRef.current) {
@@ -159,6 +229,11 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
             setFeedback(initialFeedback);
         }
     }, [initialFeedback]);
+
+    useEffect(() => {
+        if (!projectId) return;
+        setWorkflowTimeline(workflowEvents || []);
+    }, [projectId, workflowEvents]);
 
     const handleSendMessage = async () => {
         if (!chatInput.trim()) return;
@@ -185,7 +260,7 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
         setChatLoading(true);
 
         try {
-            const res = await axios.post('/api/notebook/chat', {
+            const res = await axios.post(`${pythonApiBase}/api/notebook/chat`, {
                 content: content,
                 query: newMsg.text,
                 history: chatMessages
@@ -214,7 +289,7 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
         setChatImageLoading(true);
         setChatMessages(prev => [...prev, { role: 'user', text: `Generate image: ${text}` }]);
         try {
-            const endpoint = type === "diagram" ? '/api/notebook/diagram-image' : '/api/notebook/image';
+            const endpoint = type === "diagram" ? `${pythonApiBase}/api/notebook/diagram-image` : `${pythonApiBase}/api/notebook/image`;
             const res = await axios.post(endpoint, { prompt: text });
             if (res.data?.image) {
                 if (type === "diagram") {
@@ -253,12 +328,16 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
         setDiagramImageLoading(true);
         setDiagramImageError("");
         try {
-            const res = await axios.post(`/api/project/${projectId}/append-diagram`, {
+            const res = await axios.post(`${pythonApiBase}/api/project/${projectId}/append-diagram`, {
                 content,
                 caption: "Studio Diagram"
             });
             if (res.data?.contentMarkdown) {
                 setContent(res.data.contentMarkdown);
+                await syncNodeProject({
+                    contentMarkdown: res.data.contentMarkdown,
+                    documentUrl: res.data.documentUrl
+                });
             }
         } catch (error) {
             const msg = error.response?.data?.detail || "Append diagram failed.";
@@ -277,7 +356,7 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
         setNodes([]);
         setEdges([]);
         try {
-            const res = await axios.post('/api/notebook/diagram', { content: content });
+            const res = await axios.post(`${pythonApiBase}/api/notebook/diagram`, { content: content });
             if (res.data.nodes) {
                 // ReactFlow expects node data in a specific format
                 // The backend returns { id, type, label, x, y }
@@ -310,7 +389,7 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
         setDiagramImageLoading(true);
         setDiagramImageError("");
         try {
-            const res = await axios.post('/api/notebook/diagram-image', { prompt: content });
+            const res = await axios.post(`${pythonApiBase}/api/notebook/diagram-image`, { prompt: content });
             if (res.data?.image) {
                 const link = document.createElement("a");
                 link.href = res.data.image;
@@ -338,7 +417,7 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
         setDiagramImageLoading(true);
         setDiagramImageError("");
         try {
-            const res = await axios.post(`/api/project/${projectId}/append-diagram`, {
+            const res = await axios.post(`${pythonApiBase}/api/project/${projectId}/append-diagram`, {
                 content,
                 caption: "Studio Diagram"
             });
@@ -353,80 +432,157 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
         }
     };
 
-    const handleStartReview = async () => {
+    const refreshPythonProject = async () => {
+        if (!projectId || projectId === 'demo') return;
+        try {
+            const res = await axios.get(`${pythonApiBase}/api/project/${projectId}`);
+            const data = res.data;
+            if (!data) return;
+
+            // Update local state ONLY if values are present and non-empty
+            if (data.status && data.status !== status) setStatus(data.status);
+
+            if (data.reviewFeedback && Array.isArray(data.reviewFeedback) && data.reviewFeedback.length > 0) {
+                setFeedback(data.reviewFeedback);
+            }
+
+            // Only overwrite timeline if Python has more events (rare, but possible if review loop is used)
+            if (data.workflowEvents && Array.isArray(data.workflowEvents) && data.workflowEvents.length > (workflowTimeline?.length || 0)) {
+                setWorkflowTimeline(data.workflowEvents);
+            }
+
+            if (data.clientEmail && !clientEmail) setClientEmail(data.clientEmail);
+
+            // SYNC BACK TO NODE.JS: Selective sync to avoid overwriting rich Node.js data with thin Python data
+            if (token) {
+                const patchPayload = {};
+                if (data.status) patchPayload.status = data.status;
+                if (data.clientEmail) patchPayload.clientEmail = data.clientEmail;
+
+                // Do NOT sync workflowEvents/reviewFeedback back to Node.js if they are empty from Python
+                if (data.reviewFeedback?.length > 0) patchPayload.reviewFeedback = data.reviewFeedback;
+                // Node.js is the source of truth for timeline; we only sync if Python has NEW events
+                if (data.workflowEvents?.length > (workflowEvents?.length || 0)) {
+                    patchPayload.workflowEvents = data.workflowEvents;
+                }
+
+                if (Object.keys(patchPayload).length > 0) {
+                    await axios.put(`${nodeApiBase}/api/projects/${projectId}`, patchPayload, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                }
+            }
+        } catch (error) {
+            if (error?.response?.status === 404) {
+                return;
+            }
+            console.error("Failed to refresh project from Python:", error);
+        }
+    };
+
+    useEffect(() => {
+        if (previewMode) return;
+        if (projectId && projectId !== 'demo') {
+            (async () => {
+                await ensurePythonProject(content, {
+                    status,
+                    clientEmail,
+                    workflowEvents: workflowTimeline,
+                    reviewFeedback: feedback
+                });
+                await refreshPythonProject();
+            })();
+        }
+    }, [projectId, projectName, documentUrl, previewMode]);
+
+    useEffect(() => {
+        if (previewMode || !projectId) return;
+        const interval = setInterval(() => {
+            refreshPythonProject();
+        }, 7000);
+        return () => clearInterval(interval);
+    }, [projectId, previewMode]);
+
+    const handleSendReview = async () => {
         if (!clientEmail || !projectId) {
-            setWorkflowError("Provide a client email before starting review.");
+            setWorkflowError("Provide a client email before sending.");
             return;
         }
         setWorkflowLoading(true);
         setWorkflowError("");
         setWorkflowMessage("");
         try {
-            const res = await axios.post('/api/workflow/start-review', {
+            await ensurePythonProject(content, {
+                status: 'IN_REVIEW',
+                clientEmail,
+                workflowEvents: workflowTimeline,
+                reviewFeedback: feedback
+            });
+
+            // Use resend-review if we already have review history to avoid locking logic on backend if any
+            const endpoint = workflowTimeline.some(e => e.status === 'IN_REVIEW')
+                ? `${pythonApiBase}/api/workflow/resend-review`
+                : `${pythonApiBase}/api/workflow/start-review`;
+
+            const res = await axios.post(endpoint, {
                 projectId,
                 clientEmail,
                 documentLink: documentUrl || undefined,
                 senderEmail: currentUserEmail || undefined,
                 projectName: projectName || undefined,
                 insights,
-                notes: content
+                notes: content,
+                isUpdate: hasUpdatedDoc
             });
+
+            const eventTitle = hasUpdatedDoc ? "Updated Review Sent" : "Review Sent";
+            const eventDesc = `Document sent to ${clientEmail} for review.`;
+
+            const nextTimeline = [
+                ...workflowTimeline,
+                {
+                    date: new Date().toISOString(),
+                    title: eventTitle,
+                    description: eventDesc,
+                    status: "IN_REVIEW"
+                }
+            ];
             setStatus('IN_REVIEW');
+            setWorkflowTimeline(nextTimeline);
+            await syncNodeProject({
+                status: 'IN_REVIEW',
+                workflowEvents: nextTimeline,
+                reviewFeedback: feedback,
+                documentUrl,
+                clientEmail
+            });
             if (res.data?.warning) {
-                setWorkflowMessage("Review started, but external workflow failed. Configure n8n/email to deliver messages.");
+                setWorkflowMessage("Review sent, but email delivery failed. Check SMTP settings.");
             } else {
-                setWorkflowMessage("Review workflow started. Client will receive the document link.");
+                setWorkflowMessage("Review email sent successfully.");
             }
         } catch (error) {
-            console.error("Failed to start review", error);
-            setWorkflowError("Failed to start review. Check backend logs and email settings.");
+            console.error("Failed to send review", error);
+            const errMsg = error.response?.data?.detail || error.response?.data?.msg || "Failed to send review. Check backend logs and SMTP settings.";
+            setWorkflowError(errMsg);
         } finally {
             setWorkflowLoading(false);
         }
     };
 
-    const handleResendReview = async () => {
-        if (!clientEmail || !projectId) {
-            setWorkflowError("Provide a client email before resending.");
-            return;
-        }
-        setWorkflowLoading(true);
-        setWorkflowError("");
-        setWorkflowMessage("");
-        try {
-            const res = await axios.post('/api/workflow/resend-review', {
-                projectId,
-                clientEmail,
-                documentLink: documentUrl || undefined,
-                senderEmail: currentUserEmail || undefined,
-                projectName: projectName || undefined,
-                insights,
-                notes: content
-            });
-            setStatus('IN_REVIEW');
-            if (res.data?.warning) {
-                setWorkflowMessage("Review resent, but email delivery failed. Check SMTP settings.");
-            } else {
-                setWorkflowMessage("Review resent. Client will receive the updated document.");
-            }
-        } catch (error) {
-            console.error("Failed to resend review", error);
-            setWorkflowError("Failed to resend review. Check backend logs and email settings.");
-        } finally {
-            setWorkflowLoading(false);
-        }
-    };
 
     const handleUpdateAndRegenerate = () => {
         const latestFeedback = feedback.length
             ? feedback.map((fb) => fb.comment).join('\n')
             : '';
-        navigate('/enterprise/form', {
+        navigate(`/enterprise/form?update=1&projectId=${projectId}`, {
             state: {
                 prefill: {
                     additionalInstructions: latestFeedback
                 },
-                step: 7
+                step: 7,
+                projectId,
+                forceHQ: true
             }
         });
     };
@@ -604,15 +760,12 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
                                                 />
                                             </div>
                                             <button
-                                                onClick={handleStartReview}
-                                                disabled={workflowLoading || status !== 'DRAFT'}
-                                                className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition
-                                                    ${status === 'DRAFT'
-                                                        ? 'bg-[#238636] text-white hover:bg-[#2ea043] shadow-lg shadow-green-900/20'
-                                                        : 'bg-[#161b22] border border-[#30363d] text-[#8b949e] cursor-not-allowed'}`}
+                                                onClick={handleSendReview}
+                                                disabled={workflowLoading}
+                                                className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition bg-[#238636] text-white hover:bg-[#2ea043] shadow-lg shadow-green-900/20 disabled:bg-[#161b22] disabled:border-[#30363d] disabled:text-[#8b949e] disabled:cursor-not-allowed`}
                                             >
                                                 {workflowLoading ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div> : <Send size={16} />}
-                                                {status === 'DRAFT' ? 'Start Review' : 'Active'}
+                                                Send Review
                                             </button>
                                         </div>
                                         {status === 'CHANGES_REQUESTED' && (
@@ -622,14 +775,6 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
                                                     className="px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition bg-[#21262d] border border-[#30363d] text-[#c9d1d9] hover:bg-[#30363d]"
                                                 >
                                                     Update & Regenerate
-                                                </button>
-                                                <button
-                                                    onClick={handleResendReview}
-                                                    disabled={workflowLoading}
-                                                    className="px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition bg-[#a371f7] text-white hover:bg-[#8957e5]"
-                                                >
-                                                    {workflowLoading ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div> : <Send size={16} />}
-                                                    Regenerate & Resend
                                                 </button>
                                             </div>
                                         )}
@@ -650,7 +795,7 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
                                                 <p className="text-xs text-[#8b949e]">Draft initialized.</p>
                                             </div>
 
-                                            {workflowEvents.map((event, idx) => (
+                                            {workflowTimeline.map((event, idx) => (
                                                 <motion.div key={`${event.title}-${idx}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="relative">
                                                     <div className={`absolute -left-[21px] top-1 w-3 h-3 rounded-full border border-[#0d1117] ${event.status === 'APPROVED' ? 'bg-[#238636]' :
                                                         event.status === 'CHANGES_REQUESTED' ? 'bg-[#ff7b72]' :
@@ -671,6 +816,16 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
                                     <h3 className="text-[#a371f7] text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-2">
                                         <MessageSquare size={14} /> Client Comments
                                     </h3>
+                                    {status === 'CHANGES_REQUESTED' && (
+                                        <div className="mb-4 flex gap-2">
+                                            <button
+                                                onClick={handleUpdateAndRegenerate}
+                                                className="px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition bg-[#21262d] border border-[#30363d] text-[#c9d1d9] hover:bg-[#30363d]"
+                                            >
+                                                Update & Regenerate
+                                            </button>
+                                        </div>
+                                    )}
                                     <div className="space-y-4">
                                         {feedback.length === 0 ? (
                                             <div className="text-center mt-20 text-[#8b949e]">

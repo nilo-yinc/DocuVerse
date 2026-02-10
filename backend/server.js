@@ -29,6 +29,35 @@ const isLoggedIn = require('./middlewares/isLoggedIn.middleware');
 app.post('/api/v1/users/request-password-otp', isLoggedIn, requestPasswordOTP);
 app.post('/api/v1/users/verify-password-otp', isLoggedIn, verifyPasswordOTP);
 
+// Fallback explicit route for project fetch (in case router mismatch)
+const Project = require('./models/Project');
+app.get('/api/projects/:id', isLoggedIn, async (req, res) => {
+    try {
+        const project = await Project.findById(req.params.id);
+        if (!project) return res.status(404).json({ msg: 'Project not found' });
+        if (project.userId.toString() !== req.user.id) return res.status(401).json({ msg: 'Not authorized' });
+        res.json(project);
+    } catch (err) {
+        console.error(err.message);
+        if (err.kind === 'ObjectId') return res.status(404).json({ msg: 'Project not found' });
+        res.status(500).send('Server Error');
+    }
+});
+
+// Fallback explicit route for project delete (in case router mismatch)
+app.delete('/api/projects/:id', isLoggedIn, async (req, res) => {
+    try {
+        const project = await Project.findById(req.params.id);
+        if (!project) return res.status(404).json({ msg: 'Project not found' });
+        if (project.userId.toString() !== req.user.id) return res.status(401).json({ msg: 'Not authorized' });
+        await project.deleteOne();
+        res.json({ success: true });
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
 app.get('/', (req, res) => {
     res.send('DocuVerse API Running');
 });

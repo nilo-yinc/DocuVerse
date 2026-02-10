@@ -1,10 +1,9 @@
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, Layers, GitMerge, Database, Globe, Lock, X, ChevronRight, CheckCircle } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { BookOpen, Layers, GitMerge, Database, Globe, Lock, ChevronRight, CheckCircle } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { CardContainer, CardBody, CardItem, CardSpotlight } from '../ui/Card3D';
 
 const LearningFeature = () => {
-    const [showCurriculum, setShowCurriculum] = useState(false);
 
     const concepts = [
         {
@@ -137,103 +136,16 @@ const LearningFeature = () => {
                 </div>
 
                 <div className="mt-12 text-center">
-                    <button
-                        onClick={() => setShowCurriculum(true)}
+                    <Link
+                        to="/curriculum"
                         className="text-[#f2cc60] hover:text-white hover:underline text-sm font-semibold transition flex items-center justify-center gap-2 mx-auto"
                     >
                         View Full Curriculum
                         <span className="text-xl">→</span>
-                    </button>
+                    </Link>
                 </div>
             </div>
 
-            {/* Full Curriculum Modal */}
-            <AnimatePresence>
-                {showCurriculum && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-                        onClick={() => setShowCurriculum(false)}
-                    >
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                            transition={{ type: "spring", damping: 25 }}
-                            className="bg-[#161b22] border border-[#30363d] rounded-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden"
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            {/* Modal Header */}
-                            <div className="flex items-center justify-between p-6 border-b border-[#30363d]">
-                                <div>
-                                    <h2 className="text-2xl font-bold text-white">Full Curriculum</h2>
-                                    <p className="text-sm text-[#8b949e] mt-1">Master modern software architecture fundamentals</p>
-                                </div>
-                                <button
-                                    onClick={() => setShowCurriculum(false)}
-                                    className="p-2 rounded-lg hover:bg-[#21262d] transition text-[#8b949e] hover:text-white"
-                                >
-                                    <X size={24} />
-                                </button>
-                            </div>
-
-                            {/* Modal Content */}
-                            <div className="p-6 overflow-y-auto max-h-[calc(85vh-100px)]">
-                                <div className="space-y-6">
-                                    {concepts.map((item, index) => (
-                                        <motion.div
-                                            key={index}
-                                            initial={{ opacity: 0, x: -20 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            transition={{ delay: index * 0.1 }}
-                                            className="bg-[#0d1117] border border-[#30363d] rounded-xl p-6 hover:border-[#f2cc60]/50 transition-colors"
-                                        >
-                                            <div className="flex items-start gap-4">
-                                                <div className={`w-12 h-12 rounded-lg ${item.bg} flex items-center justify-center flex-shrink-0`}>
-                                                    <item.icon className={item.color} size={24} />
-                                                </div>
-                                                <div className="flex-1">
-                                                    <h3 className="text-xl font-bold text-white mb-2">{item.title}</h3>
-                                                    <p className="text-[#8b949e] mb-4">{item.fullDesc}</p>
-
-                                                    <div className="space-y-2">
-                                                        <h4 className="text-sm font-semibold text-[#f2cc60] uppercase tracking-wider mb-3">Topics Covered</h4>
-                                                        <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                                            {item.topics.map((topic, topicIndex) => (
-                                                                <li key={topicIndex} className="flex items-center gap-2 text-sm text-[#c9d1d9]">
-                                                                    <CheckCircle size={14} className="text-[#238636] flex-shrink-0" />
-                                                                    {topic}
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </motion.div>
-                                    ))}
-                                </div>
-
-                                {/* Footer CTA */}
-                                <div className="mt-8 p-6 bg-gradient-to-r from-[#f2cc60]/10 to-[#79c0ff]/10 border border-[#30363d] rounded-xl text-center">
-                                    <h3 className="text-lg font-bold text-white mb-2">Ready to Start Learning?</h3>
-                                    <p className="text-sm text-[#8b949e] mb-4">Generate your first SRS document and see these concepts in action.</p>
-                                    <button
-                                        onClick={() => {
-                                            setShowCurriculum(false);
-                                            window.location.href = '/enterprise/form';
-                                        }}
-                                        className="bg-[#f2cc60] text-black font-bold px-6 py-3 rounded-lg hover:bg-[#e5bf53] transition inline-flex items-center gap-2"
-                                    >
-                                        Get Started <ChevronRight size={18} />
-                                    </button>
-                                </div>
-                            </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
         </section>
     );
 };
