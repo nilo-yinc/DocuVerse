@@ -1,0 +1,13 @@
+stateDiagram-v2
+    [*] --> Draft
+    Draft --> Submitted: User Finalizes
+    Submitted --> Processing: System Picks Up
+    Processing --> AwaitingApproval: High Value?
+    AwaitingApproval --> Approved: Admin Reviews
+    AwaitingApproval --> Rejected: Admin Denies
+    Approved --> Fulfillment
+    Processing --> Fulfillment: Standard Flow
+    Fulfillment --> Completed: Delivery Confirmed
+    Completed --> [*]
+    Rejected --> Draft: User Edits
+    Fulfillment --> Cancelled: User Cancels
