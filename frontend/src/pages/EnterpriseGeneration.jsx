@@ -15,73 +15,17 @@ const getProjectKey = (name) => {
     return safe || "Project";
 };
 
-// --- Mappings ---
-const mapFormDataToSchema = (data) => {
-    const mapUserScale = (val) => {
-        if (val.includes('< 100')) return "<100";
-        if (val.includes('100 - 1,000')) return "100-1k";
-        if (val.includes('1,000 - 10,000')) return "1k-100k";
-        if (val.includes('10,000+')) return ">100k";
-        return "100-1k";
-    };
-    const mapPerformance = (val) => {
-        if (val.includes('Standard')) return "Normal";
-        if (val.includes('High Performance')) return "High";
-        if (val.includes('Real-time')) return "Real-time";
-        return "Normal";
-    };
-    const mapDetailLevel = (val) => {
-        if (val.includes('Standard')) return "Technical";
-        if (val.includes('Professional')) return "Enterprise-grade";
-        if (val.includes('Brief')) return "High-level";
-        return "Enterprise-grade";
-    };
-
-    return {
-        project_identity: {
-            project_name: data.projectName || "Untitled Project",
-            author: data.authors ? data.authors.split('\n').map(s => s.trim()).filter(Boolean) : ["Anonymous"],
-            organization: data.organization || "Unspecified",
-            problem_statement: data.problemStatement || "No problem statement provided.",
-            target_users: data.targetUsers.length > 0 ? data.targetUsers : ["End User"],
-            live_link: null,
-            project_id: null
-        },
-        system_context: {
-            application_type: data.appType || "Web Application",
-            domain: data.domain || "General"
-        },
-        functional_scope: {
-            core_features: data.coreFeatures
-                ? data.coreFeatures.split('\n').map(s => s.trim().replace(/^[-•]\s*/, '')).filter(Boolean)
-                : ["Core functionality"],
-            primary_user_flow: data.userFlow || "Standard user flow."
-        },
-        non_functional_requirements: {
-            expected_user_scale: mapUserScale(data.userScale),
-            performance_expectation: mapPerformance(data.performance)
-        },
-        security_and_compliance: {
-            authentication_required: data.authRequired === 'Yes',
-            sensitive_data_handling: data.sensitiveData === 'Yes',
-            compliance_requirements: data.compliance
-        },
-        technical_preferences: {
-            preferred_backend: data.backendPref !== 'No Preference' ? data.backendPref : null,
-            database_preference: data.dbPref !== 'No Preference' ? data.dbPref : null,
-            deployment_preference: data.deploymentPref !== 'No Preference' ? data.deploymentPref : null
-        },
-        output_control: {
-            srs_detail_level: mapDetailLevel(data.detailLevel),
-            additional_instructions: data.additionalInstructions || null
-        }
-    };
-};
-
 const EnterpriseGeneration = () => {
     const location = useLocation();
     const navigate = useNavigate();
-    const { user } = useAuth();
+    const { user, token } = useAuth();
+    const resolvedToken = token || sessionStorage.getItem('token') || localStorage.getItem('token');
+    const formData = location.state?.formData;
+    const isUpdateFlow = Boolean(location.state?.update || location.state?.projectId || formData?.projectId);
+    const existingProjectId = isUpdateFlow
+        ? (location.state?.projectId || formData?.projectId || localStorage.getItem('autoSRS_activeProjectId') || null)
+        : null;
+    const forceHQ = location.state?.forceHQ || false;
 
     // Primary Generation State (Quick Pass)
     const [status, setStatus] = useState('initializing');
@@ -98,13 +42,8 @@ const EnterpriseGeneration = () => {
     const [hqMessage, setHqMessage] = useState("");
     const [hqResult, setHqResult] = useState(null);
 
-    const pollingRef = useRef(null);
-    const hqPollingRef = useRef(null);
     const timerRef = useRef(null);
     const hasStartedRef = useRef(false);
-
-    const formData = location.state?.formData;
-    const projectKey = formData ? getProjectKey(formData.projectName) : "Project";
 
     const formatTime = (seconds) => {
         const mins = Math.floor(seconds / 60);
@@ -114,50 +53,88 @@ const EnterpriseGeneration = () => {
 
     const startGeneration = async (mode = 'quick') => {
         if (!formData) return;
+        if (!resolvedToken) {
+            setError("Authentication required. Please login again.");
+            setStatus('error');
+            setMessage("Authentication required");
+            navigate('/enterprise/access');
+            return;
+        }
 
         try {
             if (mode === 'quick') {
                 setStatus('processing');
                 setProgress(0);
-                timerRef.current = setInterval(() => setTimer(t => t + 1), 1000);
-                pollingRef.current = setInterval(checkProgress, 1000);
+                if (!timerRef.current) {
+                    timerRef.current = setInterval(() => setTimer(t => t + 1), 1000);
+                }
             } else {
                 setHqStatus('processing');
                 setHqProgress(0);
                 setHqMessage("Starting High Quality analysis...");
-                hqPollingRef.current = setInterval(checkHqProgress, 1000);
+                if (!timerRef.current) {
+                    timerRef.current = setInterval(() => setTimer(t => t + 1), 1000);
+                }
             }
 
-            const payload = mapFormDataToSchema(formData);
+            const nodeApiBase = import.meta.env.VITE_NODE_API_URL
+                || (typeof window !== 'undefined' ? `http://${window.location.hostname || 'localhost'}:5000` : 'http://localhost:5000');
+            const genUrl = `${nodeApiBase}/api/projects/enterprise/generate`;
 
-            const response = await fetch(`/generate_srs?mode=${mode}`, {
+            // Call Node.js Backend for Persistence & Generation
+            const sanitizedFormData = { ...formData };
+            if (!isUpdateFlow) {
+                delete sanitizedFormData.projectId;
+            }
+
+            const response = await fetch(genUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${resolvedToken}`
+                },
+                body: JSON.stringify({
+                    projectId: isUpdateFlow ? (existingProjectId || undefined) : undefined,
+                    mode: mode === 'quick' ? 'quick' : 'full',
+                    formData: {
+                        ...sanitizedFormData,
+                        projectId: isUpdateFlow ? (existingProjectId || undefined) : undefined
+                    }
+                })
             });
 
-            if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.detail || "Generation failed");
-            }
-
-            const data = await response.json();
+                const rawText = await response.text();
+                let data = null;
+                try {
+                    data = rawText ? JSON.parse(rawText) : null;
+                } catch {
+                    data = null;
+                }
+                if (!response.ok) {
+                    const errMessage = data?.msg || data?.detail || rawText || "Generation backend failed";
+                    throw new Error(errMessage);
+                }
 
             if (mode === 'quick') {
-                setResult(data);
+                setStudioProjectId(data.projectId);
+                setResult({ download_url: data.srs_document_path });
                 setStatus('complete');
                 setProgress(100);
                 setMessage("Quick SRS Ready!");
-                clearInterval(pollingRef.current);
-
-                // Automatically create Studio Project
-                createStudioProject(formData.projectName, data.download_url);
+                if (data.projectId) {
+                    localStorage.setItem('autoSRS_activeProjectId', data.projectId);
+                }
             } else {
-                setHqResult(data);
+                setHqResult({ download_url: data.srs_document_path });
                 setHqStatus('complete');
                 setHqProgress(100);
                 setHqMessage("High Quality SRS Complete!");
-                clearInterval(hqPollingRef.current);
+                setStudioProjectId(data.projectId);
+                if (data.projectId) {
+                    localStorage.setItem('autoSRS_activeProjectId', data.projectId);
+                    // Automatically navigate to studio after short delay
+                    setTimeout(() => navigate(`/studio/${data.projectId}`), 1500);
+                }
             }
 
         } catch (err) {
@@ -165,13 +142,12 @@ const EnterpriseGeneration = () => {
             if (mode === 'quick') {
                 setError(err.message);
                 setStatus('error');
-                setMessage("System Error: Quick Generation Failed");
-                clearInterval(pollingRef.current);
             } else {
                 setHqStatus('error');
                 setHqMessage(err.message);
-                clearInterval(hqPollingRef.current);
             }
+            clearInterval(timerRef.current);
+            timerRef.current = null;
         }
     };
 
@@ -180,71 +156,14 @@ const EnterpriseGeneration = () => {
         if (!formData) return;
         if (!hasStartedRef.current) {
             hasStartedRef.current = true;
-            startGeneration('quick');
+            startGeneration(forceHQ ? 'full' : 'quick');
         }
 
         return () => {
-            if (pollingRef.current) clearInterval(pollingRef.current);
-            if (hqPollingRef.current) clearInterval(hqPollingRef.current);
             if (timerRef.current) clearInterval(timerRef.current);
+            timerRef.current = null;
         };
     }, []);
-
-    // --- Polling Loops ---
-    const checkProgress = async () => {
-        try {
-            const res = await fetch(`/srs_progress/${projectKey}`);
-            if (res.ok) {
-                const data = await res.json();
-                if (data.progress > 0) setProgress(data.progress);
-                if (data.message) setMessage(data.message);
-
-                if (data.status === 'failed') {
-                    setError(data.message);
-                    setStatus('error');
-                    clearInterval(pollingRef.current);
-                }
-            }
-        } catch (e) { console.warn("Polling error:", e); }
-    };
-
-    const checkHqProgress = async () => {
-        try {
-            const res = await fetch(`/srs_progress/${projectKey}`);
-            if (res.ok) {
-                const data = await res.json();
-                // If the backend returns progress for the current job
-                if (data.progress > 0) setHqProgress(data.progress);
-                if (data.message) setHqMessage(data.message);
-
-                if (data.status === 'failed') {
-                    setHqStatus('error');
-                    setHqMessage(data.message);
-                    clearInterval(hqPollingRef.current);
-                }
-            }
-        } catch (e) { console.warn("HQ Polling error:", e); }
-    };
-
-    const createStudioProject = async (name, docUrl) => {
-        try {
-            const res = await fetch('/api/project/create', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: name,
-                    content: `# ${name}\n\nSRS document generated successfully.\nReady for further analysis and diagrams.`,
-                    documentUrl: docUrl
-                })
-            });
-            if (res.ok) {
-                const project = await res.json();
-                setStudioProjectId(project.id);
-            }
-        } catch (e) {
-            console.error("Failed to create studio project:", e);
-        }
-    };
 
     const handleDownload = (url) => {
         if (url) window.location.href = url;
@@ -270,7 +189,7 @@ const EnterpriseGeneration = () => {
                 <Logo size="md" subText="GENERATOR_CORE" />
                 <div className="flex items-center gap-4">
                     <div className="text-right hidden md:block">
-                        <div className="text-white font-bold text-sm tracking-wide">{user?.name || "Niloy Mallik"}</div>
+                        <div className="text-white font-bold text-sm tracking-wide">{user?.name || "User"}</div>
                         <div className="text-slate-500 text-[10px] font-mono tracking-wider uppercase">ENTERPRISE SRS</div>
                     </div>
                     <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400">
@@ -311,11 +230,17 @@ const EnterpriseGeneration = () => {
                         </div>
                     </div>
 
-                    <h2 className="text-xl md:text-2xl font-bold mb-6 text-center tracking-wide text-cyan-400"
+                    <h2 className="text-xl md:text-2xl font-bold mb-2 text-center tracking-wide text-cyan-400"
                         style={{ textShadow: "0 0 10px rgba(6,182,212,0.5)" }}>
                         {status === 'complete' ? (hqStatus === 'processing' ? "Enhancing Document Quality..." : "Generation Completed Successfully.") :
                             status === 'error' ? "Generation Failed." : message}
                     </h2>
+
+                    {status === 'error' && error && (
+                        <div className="mb-6 px-4 py-2 bg-red-900/20 border border-red-500/30 rounded-lg text-red-400 text-sm font-mono max-w-md text-center">
+                            {error}
+                        </div>
+                    )}
 
                     <div className="flex flex-col items-center gap-2 text-sm font-mono tracking-wider mb-8">
                         <div className="text-slate-400">Target: <span className="text-slate-200">less than 1 minute</span></div>

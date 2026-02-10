@@ -148,7 +148,7 @@ const LandingPage = () => {
             {/* --- NEW: Interactive Workspace Features --- */}
 
             <ScrollSection>
-                <IntegratedNotebook initialInsights={LANDING_INSIGHTS} />
+                <IntegratedNotebook initialInsights={LANDING_INSIGHTS} previewMode />
             </ScrollSection>
 
             <ScrollSection>

@@ -15,6 +15,7 @@ const EnterpriseForm = () => {
 
     // State matching the provided images
     const [formData, setFormData] = useState({
+        projectId: '',
         // 1. Project Identity
         projectName: '',
         authors: '', // 'Name 1\nName 2'
@@ -59,7 +60,48 @@ const EnterpriseForm = () => {
     const [isLoaded, setIsLoaded] = useState(false);
 
     // Load from Local Storage on Mount
+    const defaultFormData = {
+        projectId: '',
+        projectName: '',
+        authors: '',
+        organization: '',
+        problemStatement: '',
+        targetUsers: [],
+        otherUser: '',
+        appType: '',
+        domain: '',
+        domain_other: '',
+        coreFeatures: '',
+        userFlow: '',
+        userScale: '',
+        userScale_other: '',
+        performance: '',
+        performance_other: '',
+        authRequired: 'Yes',
+        sensitiveData: 'Yes',
+        compliance: [],
+        backendPref: '',
+        backendPref_other: '',
+        dbPref: '',
+        dbPref_other: '',
+        deploymentPref: '',
+        deploymentPref_other: '',
+        detailLevel: 'Professional',
+        additionalInstructions: ''
+    };
+
     useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const shouldReset = location.state?.resetForm || params.get('new') === '1';
+        const isUpdateFlow = params.get('update') === '1' || location.state?.update === true;
+        if (shouldReset) {
+            localStorage.removeItem('autoSRS_enterpriseForm');
+            localStorage.removeItem('autoSRS_activeProjectId');
+            setFormData(defaultFormData);
+            setStep(1);
+            setIsLoaded(true);
+            return;
+        }
         const savedData = localStorage.getItem('autoSRS_enterpriseForm');
         if (savedData) {
             try {
@@ -71,8 +113,16 @@ const EnterpriseForm = () => {
                 console.error("Failed to load saved form", e);
             }
         }
+        const incomingProjectId = location.state?.projectId || params.get('projectId');
+        if (isUpdateFlow && incomingProjectId) {
+            localStorage.setItem('autoSRS_activeProjectId', incomingProjectId);
+            setFormData(prev => ({ ...prev, projectId: incomingProjectId }));
+        } else if (!isUpdateFlow) {
+            localStorage.removeItem('autoSRS_activeProjectId');
+            setFormData(prev => ({ ...prev, projectId: '' }));
+        }
         setIsLoaded(true); // Mark as loaded so we can start saving
-    }, []);
+    }, [location.state, location.search]);
 
     useEffect(() => {
         const prefill = location.state?.prefill;
@@ -109,7 +159,12 @@ const EnterpriseForm = () => {
     };
 
     const handleGenerate = () => {
-        navigate('/enterprise/generation', { state: { formData } });
+        const params = new URLSearchParams(location.search);
+        const isUpdateFlow = params.get('update') === '1' || location.state?.update === true;
+        const storedProjectId = localStorage.getItem('autoSRS_activeProjectId');
+        const projectId = isUpdateFlow ? (location.state?.projectId || formData.projectId || storedProjectId) : null;
+        const payload = { ...formData, projectId: projectId || '' };
+        navigate('/enterprise/generation', { state: { formData: payload, projectId, update: isUpdateFlow } });
     };
 
     const sectionVariants = {
