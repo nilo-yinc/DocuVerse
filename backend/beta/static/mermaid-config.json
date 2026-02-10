@@ -2,7 +2,7 @@
   "theme": "base",
   "themeVariables": {
     "fontFamily": "Arial",
-    "fontSize": "14px",
+    "fontSize": "16px",
     "primaryColor": "#E8F1FF",
     "primaryTextColor": "#0F172A",
     "primaryBorderColor": "#1D4ED8",
@@ -17,10 +17,12 @@
   },
   "flowchart": {
     "htmlLabels": true,
-    "curve": "basis"
+    "curve": "basis",
+    "nodeSpacing": 60,
+    "rankSpacing": 80
   },
   "er": {
-    "fontSize": 13
+    "fontSize": 14
   },
   "securityLevel": "loose"
 }

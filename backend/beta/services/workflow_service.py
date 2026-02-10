@@ -155,7 +155,7 @@ class WorkflowService:
             return {"nodes": [], "edges": []}
 
         prompt = f"""
-        You are a Cloud Solution Architect. Generate a system architecture diagram for these requirements.
+        You are a Cloud Solution Architect. Generate a clear, detailed system architecture diagram for these requirements.
         Output MUST be valid JSON structure compatible with ReactFlow.
         
         Strictly follow this structure:
@@ -175,9 +175,11 @@ class WorkflowService:
         }}
         
         Style Guide:
-        - Layout nodes in a logical flow (Top-Down or Left-Right).
-        - Use x,y coordinates to space them out (assume canvas is 800x600).
+        - Layout nodes in a logical flow (Left-Right).
+        - Use x,y coordinates to space them out (assume canvas is 1200x800).
         - 'type' must be one of: 'client', 'server', 'db', 'api'.
+        - Use 8-12 nodes for more detail and clarity.
+        - Keep labels short (2-4 words).
         
         REQUIREMENTS:
         {content}

@@ -14,10 +14,14 @@ const AITutorFeature = () => {
     const [error, setError] = useState("");
     const [expanded, setExpanded] = useState(false);
     const [imageLoading, setImageLoading] = useState(false);
-    const [imageEnabled, setImageEnabled] = useState(false);
-    const [imageReason, setImageReason] = useState("");
-    const [statusLoading, setStatusLoading] = useState(false);
+    const [diagramEnabled, setDiagramEnabled] = useState(false);
+    const [diagramReason, setDiagramReason] = useState("");
+    const [diagramStatusLoading, setDiagramStatusLoading] = useState(false);
+    const [photoEnabled, setPhotoEnabled] = useState(false);
+    const [photoReason, setPhotoReason] = useState("");
+    const [photoStatusLoading, setPhotoStatusLoading] = useState(false);
     const [mode, setMode] = useState("text"); // text | image
+    const [imageType, setImageType] = useState("diagram"); // diagram | photo
     const fileInputRef = useRef(null);
 
     const baseContext = "System design tutor for software engineering topics. Provide concise, structured answers.";
@@ -42,52 +46,75 @@ const AITutorFeature = () => {
 
     const buildImagePrompt = (preset) => {
         const topic = lastUserTopic();
-        const base = "Create a clean, professional, blueprint-style diagram image.";
+        const base = "Create a clean, professional, blueprint-style diagram image. Use vector shapes, high contrast, minimal text (1-2 word labels), no paragraphs, no tiny text.";
         if (preset === 'arch') {
-            return `${base} Title: System Architecture. Context: ${topic}. Show 5-7 labeled components with connections. Dark theme, thin lines, high contrast.`;
+            return `${base} Title: System Architecture. Context: ${topic}. Show 5-7 labeled components with clear connections and spacing. Dark theme, thin lines.`;
         }
         if (preset === 'er') {
-            return `${base} Title: Entity-Relationship Diagram. Context: ${topic}. Show 5-7 entities with attributes and relationships. Dark theme, thin lines, high contrast.`;
+            return `${base} Title: Entity-Relationship Diagram. Context: ${topic}. Show 5-7 entities with short attribute lists and relationships. Dark theme, thin lines.`;
         }
         if (preset === 'seq') {
-            return `${base} Title: Sequence Flow. Context: ${topic}. Show 5-7 actors/services with arrows for interactions. Dark theme, thin lines, high contrast.`;
+            return `${base} Title: Sequence Flow. Context: ${topic}. Show 5-7 actors/services with arrows for interactions. Dark theme, thin lines.`;
         }
         if (preset === 'userflow') {
-            return `${base} Title: User Flow. Context: ${topic}. Show 5-7 steps with arrows. Dark theme, thin lines, high contrast.`;
+            return `${base} Title: User Flow. Context: ${topic}. Show 5-7 steps with arrows. Dark theme, thin lines.`;
         }
         return `${base} Context: ${topic}.`;
     };
 
-    const refreshImageStatus = async () => {
-        setStatusLoading(true);
+    const refreshDiagramStatus = async () => {
+        setDiagramStatusLoading(true);
         try {
-            const res = await axios.get('/api/notebook/image/status');
-            setImageEnabled(Boolean(res.data?.enabled));
-            setImageReason(res.data?.reason || "");
+            const res = await axios.get('/api/notebook/diagram-image/status');
+            setDiagramEnabled(Boolean(res.data?.enabled));
+            setDiagramReason(res.data?.reason || "");
             return Boolean(res.data?.enabled);
         } catch {
-            setImageEnabled(false);
-            setImageReason("Status check failed");
+            setDiagramEnabled(false);
+            setDiagramReason("Status check failed");
             return false;
         } finally {
-            setStatusLoading(false);
+            setDiagramStatusLoading(false);
+        }
+    };
+
+    const refreshPhotoStatus = async () => {
+        setPhotoStatusLoading(true);
+        try {
+            const res = await axios.get('/api/notebook/image/status');
+            setPhotoEnabled(Boolean(res.data?.enabled));
+            setPhotoReason(res.data?.reason || "");
+            return Boolean(res.data?.enabled);
+        } catch {
+            setPhotoEnabled(false);
+            setPhotoReason("Status check failed");
+            return false;
+        } finally {
+            setPhotoStatusLoading(false);
         }
     };
 
     useEffect(() => {
-        refreshImageStatus();
+        refreshDiagramStatus();
+        refreshPhotoStatus();
     }, []);
 
     const handleSend = async (text) => {
         if (!text) return;
         if (text.trim().toLowerCase().startsWith('/image ')) {
             const prompt = text.trim().slice(7);
-            await handleGenerateImage(prompt);
+            await handleGenerateImage(prompt, "photo");
+            setInputText("");
+            return;
+        }
+        if (text.trim().toLowerCase().startsWith('/diagram ')) {
+            const prompt = text.trim().slice(9);
+            await handleGenerateImage(prompt, "diagram");
             setInputText("");
             return;
         }
         if (mode === "image") {
-            await handleGenerateImage(text);
+            await handleGenerateImage(text, imageType);
             setInputText("");
             return;
         }
@@ -111,11 +138,16 @@ const AITutorFeature = () => {
         }
     };
 
-    const handleGenerateImage = async (text) => {
+    const handleGenerateImage = async (text, typeOverride) => {
         if (!text) return;
-        const enabled = imageEnabled || (await refreshImageStatus());
+        const type = typeOverride || imageType;
+        const enabled = type === "diagram"
+            ? (diagramEnabled || (await refreshDiagramStatus()))
+            : (photoEnabled || (await refreshPhotoStatus()));
         if (!enabled) {
-            const reason = imageReason || 'Image generation is disabled.';
+            const reason = type === "diagram"
+                ? (diagramReason || 'Diagram generation is disabled.')
+                : (photoReason || 'Image generation is disabled.');
             setError(reason);
             setMessages(prev => [...prev, { role: 'ai', text: `Image generation is off. ${reason}` }]);
             return;
@@ -124,7 +156,8 @@ const AITutorFeature = () => {
         setImageLoading(true);
         setMessages(prev => [...prev, { role: 'user', text: `Generate image: ${text}` }]);
         try {
-            const res = await axios.post('/api/notebook/image', { prompt: text });
+            const endpoint = type === "diagram" ? '/api/notebook/diagram-image' : '/api/notebook/image';
+            const res = await axios.post(endpoint, { prompt: text });
             if (res.data?.image) {
                 setMessages(prev => [...prev, { role: 'ai', type: 'image', imageUrl: res.data.image, text }]);
             } else {
@@ -215,13 +248,22 @@ const AITutorFeature = () => {
                             <div className="flex items-center gap-2">
                                 <span className="text-xs text-[#8b949e] border border-[#30363d] px-2 py-0.5 rounded">Tutor</span>
                                 <button
-                                    onClick={refreshImageStatus}
-                                    className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${imageEnabled ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e]'} ${statusLoading ? 'opacity-70' : 'hover:border-[#3fb950] hover:text-[#3fb950]'}`}
-                                    title={imageEnabled ? 'Image enabled. Click to refresh.' : `Image disabled: ${imageReason || 'Unknown reason'}`}
-                                    disabled={statusLoading}
+                                    onClick={refreshDiagramStatus}
+                                    className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${diagramEnabled ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e]'} ${diagramStatusLoading ? 'opacity-70' : 'hover:border-[#3fb950] hover:text-[#3fb950]'}`}
+                                    title={diagramEnabled ? 'Diagram enabled. Click to refresh.' : `Diagram disabled: ${diagramReason || 'Unknown reason'}`}
+                                    disabled={diagramStatusLoading}
                                 >
-                                    <RefreshCw size={12} className={statusLoading ? 'animate-spin' : ''} />
-                                    {imageEnabled ? 'Image On' : 'Image Off'}
+                                    <RefreshCw size={12} className={diagramStatusLoading ? 'animate-spin' : ''} />
+                                    {diagramEnabled ? 'Diagram On' : 'Diagram Off'}
+                                </button>
+                                <button
+                                    onClick={refreshPhotoStatus}
+                                    className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${photoEnabled ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e]'} ${photoStatusLoading ? 'opacity-70' : 'hover:border-[#3fb950] hover:text-[#3fb950]'}`}
+                                    title={photoEnabled ? 'Image enabled. Click to refresh.' : `Image disabled: ${photoReason || 'Unknown reason'}`}
+                                    disabled={photoStatusLoading}
+                                >
+                                    <RefreshCw size={12} className={photoStatusLoading ? 'animate-spin' : ''} />
+                                    {photoEnabled ? 'Image On' : 'Image Off'}
                                 </button>
                                 <button
                                     onClick={() => setExpanded((prev) => !prev)}
@@ -282,19 +324,40 @@ const AITutorFeature = () => {
                                 {imagePresets.map((preset) => (
                                     <button
                                         key={preset.id}
-                                    onClick={() => handleGenerateImage(buildImagePrompt(preset.id))}
-                                    disabled={!imageEnabled || imageLoading}
+                                    onClick={() => handleGenerateImage(buildImagePrompt(preset.id), "diagram")}
+                                    disabled={!diagramEnabled || imageLoading}
                                     className="px-3 py-1.5 text-xs rounded-lg border border-[#30363d] bg-[#0d1117] text-[#8b949e] hover:text-[#3fb950] hover:border-[#3fb950] transition disabled:opacity-50"
-                                    title={imageEnabled ? `Generate ${preset.label}` : `Image disabled: ${imageReason}`}
+                                    title={diagramEnabled ? `Generate ${preset.label}` : `Diagram disabled: ${diagramReason}`}
                                     >
                                     {preset.label}
-                                    </button>
+                                </button>
                                 ))}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-[#8b949e]">Mode:</span>
+                                <button
+                                    onClick={() => setImageType("diagram")}
+                                    className={`px-3 py-1 text-xs rounded-lg border transition ${imageType === 'diagram' ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e] hover:text-[#c9d1d9]'}`}
+                                    disabled={!diagramEnabled}
+                                    title={diagramEnabled ? 'Use diagram generation' : `Diagram disabled: ${diagramReason}`}
+                                >
+                                    Diagram
+                                </button>
+                                <button
+                                    onClick={() => setImageType("photo")}
+                                    className={`px-3 py-1 text-xs rounded-lg border transition ${imageType === 'photo' ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e] hover:text-[#c9d1d9]'}`}
+                                    disabled={!photoEnabled}
+                                    title={photoEnabled ? 'Use image generation' : `Image disabled: ${photoReason}`}
+                                >
+                                    Image
+                                </button>
                             </div>
                             <div className="relative">
                                 <input
                                     type="text"
-                                    placeholder={mode === "image" ? "Describe the image to generate..." : "Ask or type /image prompt"}
+                                    placeholder={mode === "image"
+                                        ? (imageType === "diagram" ? "Describe the diagram to generate..." : "Describe the image to generate...")
+                                        : "Ask or type /diagram or /image prompt"}
                                     value={inputText}
                                     onChange={(e) => setInputText(e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && handleSend(inputText)}
@@ -308,9 +371,9 @@ const AITutorFeature = () => {
                                 </button>
                                 <button
                                     onClick={() => setMode((prev) => (prev === "image" ? "text" : "image"))}
-                                    className={`absolute right-11 top-2 p-1.5 border rounded-lg transition-colors ${mode === "image" ? 'bg-[#3fb950] text-white border-[#3fb950]' : 'bg-[#161b22] border-[#30363d] text-[#c9d1d9]'} ${!imageEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    title={imageEnabled ? 'Toggle image mode' : `Image disabled: ${imageReason}`}
-                                    disabled={!imageEnabled}
+                                    className={`absolute right-11 top-2 p-1.5 border rounded-lg transition-colors ${mode === "image" ? 'bg-[#3fb950] text-white border-[#3fb950]' : 'bg-[#161b22] border-[#30363d] text-[#c9d1d9]'} ${mode === "image" && imageType === "diagram" && !diagramEnabled ? 'opacity-50 cursor-not-allowed' : ''} ${mode === "image" && imageType === "photo" && !photoEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    title={mode === "image" ? 'Toggle image mode' : 'Toggle image mode'}
+                                    disabled={mode === "image" && ((imageType === "diagram" && !diagramEnabled) || (imageType === "photo" && !photoEnabled))}
                                 >
                                     <ImageIcon size={16} />
                                 </button>

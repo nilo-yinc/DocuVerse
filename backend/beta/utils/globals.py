@@ -287,11 +287,11 @@ def render_mermaid_png(mermaid_code: str, output_png: Path):
         mmdc_path,
         "-i", str(mmd_path),
         "-o", str(output_png),
-        "-w", "2800",
-        "-H", "1800",
+        "-w", "3600",
+        "-H", "2200",
         "-t", "neutral",
         "-b", "white",
-        "-s", "2.5"
+        "-s", "3"
     ]
     if config_path.exists():
         cmd.extend(["-c", str(config_path)])

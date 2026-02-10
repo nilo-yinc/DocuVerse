@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request, HTTPException, BackgroundTasks, Query, UploadFile, File, Form
+from starlette.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -18,6 +19,12 @@ from pydantic import BaseModel
 from typing import List, Optional
 import os
 import requests
+import base64
+import tempfile
+import shutil
+from docx import Document
+from docx.shared import Inches
+from backend.beta.utils.email_service import _resolve_docx_path
 
 _root_env = find_dotenv()
 _backend_env = Path(__file__).resolve().parents[1] / ".env"
@@ -35,6 +42,70 @@ class ImageRequest(BaseModel):
     height: int = 1024
     steps: int = 40
     cfg_scale: float = 9.0
+
+class DiagramImageRequest(BaseModel):
+    prompt: str
+
+class AppendDiagramRequest(BaseModel):
+    content: str
+    caption: Optional[str] = None
+
+def _sanitize_mermaid_id(value: str, fallback: str) -> str:
+    if not value:
+        return fallback
+    safe = "".join(ch if ch.isalnum() else "_" for ch in value)
+    return safe if safe.strip("_") else fallback
+
+def _reactflow_to_mermaid(nodes: list, edges: list) -> str:
+    lines = ["flowchart LR"]
+    id_map = {}
+    used = set()
+
+    for idx, node in enumerate(nodes or [], start=1):
+        raw_id = str(node.get("id") or idx)
+        node_id = _sanitize_mermaid_id(raw_id, f"N{idx}")
+        if node_id in used:
+            node_id = f"{node_id}_{idx}"
+        used.add(node_id)
+        id_map[raw_id] = node_id
+
+        label = str(node.get("label") or f"Node {idx}").replace('"', "'")
+        node_type = str(node.get("type") or "").lower()
+        if node_type == "db":
+            shape = f'{node_id}[(\"{label}\")]'
+        elif node_type == "client":
+            shape = f'{node_id}([\"{label}\"])'
+        else:
+            shape = f'{node_id}[\"{label}\"]'
+        lines.append(f"    {shape}")
+
+    if not id_map:
+        lines.append("    A[\"System\"] --> B[\"Service\"]")
+        return "\n".join(lines)
+
+    for edge in edges or []:
+        raw_source = str(edge.get("source") or "")
+        raw_target = str(edge.get("target") or "")
+        source = id_map.get(raw_source)
+        target = id_map.get(raw_target)
+        if not source or not target:
+            continue
+        label = str(edge.get("label") or "").strip()
+        if label:
+            lines.append(f"    {source} -->|{label}| {target}")
+        else:
+            lines.append(f"    {source} --> {target}")
+
+    return "\n".join(lines)
+
+async def _generate_diagram_image_data(content: str) -> bytes:
+    diagram_payload = {"content": content}
+    flow = await WorkflowService.execute_workflow("diagram", diagram_payload)
+    mermaid_code = _reactflow_to_mermaid(flow.get("nodes", []), flow.get("edges", []))
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_png = Path(tmpdir) / "diagram.png"
+        render_mermaid_png(mermaid_code, output_png)
+        return output_png.read_bytes()
 
 class NotebookChatRequest(BaseModel):
     content: str
@@ -763,7 +834,8 @@ async def generate_srs(
 
             try:
                 _set_progress(project_key, "doc", 70, "Building DOCX file...")
-                generated_path = _generate_document(
+                generated_path = await run_in_threadpool(
+                    _generate_document,
                     project_name, project_key, inputs, sections, instant_image_paths, "instant"
                 )
                 _set_progress(
@@ -796,7 +868,7 @@ async def generate_srs(
             # Quick mode: AI-enriched sections + only 2 core diagrams (better quality, faster than full).
             sections = _build_sections_with_ai(inputs, project_name, project_key)
             _set_progress(project_key, "diagrams", 55, "Rendering core diagrams...")
-            quick_stats = _render_quick_diagrams(inputs, image_paths)
+            quick_stats = await run_in_threadpool(_render_quick_diagrams, inputs, image_paths)
             if quick_stats["core_rendered"] == 0:
                 # Do not fail quick mode; generate document without freshly rendered diagrams.
                 _set_progress(
@@ -808,7 +880,9 @@ async def generate_srs(
                 )
             try:
                 _set_progress(project_key, "doc", 80, "Compiling quick DOCX...")
-                generated_path = _generate_document(project_name, project_key, inputs, sections, image_paths, "quick")
+                generated_path = await run_in_threadpool(
+                    _generate_document, project_name, project_key, inputs, sections, image_paths, "quick"
+                )
                 _set_progress(
                     project_key,
                     "completed",
@@ -837,7 +911,7 @@ async def generate_srs(
                 traceback.print_exc()
                 try:
                     _set_progress(project_key, "doc", 82, "Quick build failed, switching to instant fallback...")
-                    generated_path = _generate_instant_fallback(project_name, project_key, inputs, image_paths)
+                    generated_path = await run_in_threadpool(_generate_instant_fallback, project_name, project_key, inputs, image_paths)
                     _set_progress(
                         project_key,
                         "completed",
@@ -864,7 +938,7 @@ async def generate_srs(
 
         sections = _build_sections_with_ai(inputs, project_name, project_key)
         _set_progress(project_key, "diagrams", 60, "Rendering all diagrams...")
-        diagram_stats = _render_all_diagrams(inputs, image_paths, sections["external_interfaces_section"])
+        diagram_stats = await run_in_threadpool(_render_all_diagrams, inputs, image_paths, sections["external_interfaces_section"])
         if diagram_stats["core_rendered"] == 0:
             _set_progress(
                 project_key,
@@ -877,7 +951,9 @@ async def generate_srs(
         # 3. Document Construction Phase
         try:
             _set_progress(project_key, "doc", 85, "Building full DOCX...")
-            generated_path = _generate_document(project_name, project_key, inputs, sections, image_paths, "full")
+            generated_path = await run_in_threadpool(
+                _generate_document, project_name, project_key, inputs, sections, image_paths, "full"
+            )
             _set_progress(
                 project_key,
                 "completed",
@@ -905,7 +981,7 @@ async def generate_srs(
             traceback.print_exc()
             try:
                 _set_progress(project_key, "doc", 88, "Full build failed, switching to instant fallback...")
-                generated_path = _generate_instant_fallback(project_name, project_key, inputs, image_paths)
+                generated_path = await run_in_threadpool(_generate_instant_fallback, project_name, project_key, inputs, image_paths)
                 _set_progress(
                     project_key,
                     "completed",
@@ -1067,6 +1143,14 @@ async def generate_image(request: ImageRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Image generation error: {e}")
 
+@app.get("/api/notebook/diagram-image/status")
+async def diagram_image_status():
+    mmdc_path = shutil.which("mmdc") or shutil.which("mmdc.cmd")
+    return JSONResponse(content={
+        "enabled": bool(mmdc_path),
+        "reason": "" if mmdc_path else "mmdc not found. Install @mermaid-js/mermaid-cli."
+    })
+
 @app.get("/api/notebook/image/status")
 async def image_status():
     api_key = os.getenv("STABILITY_API_KEY", "").strip()
@@ -1074,6 +1158,64 @@ async def image_status():
         "enabled": bool(api_key),
         "reason": "" if api_key else "STABILITY_API_KEY missing"
     })
+
+@app.post("/api/notebook/diagram-image")
+async def generate_diagram_image(request: DiagramImageRequest):
+    if not request.prompt.strip():
+        raise HTTPException(status_code=400, detail="Prompt is required")
+    try:
+        data = await _generate_diagram_image_data(request.prompt)
+        return JSONResponse(content={"image": f"data:image/png;base64,{base64.b64encode(data).decode('utf-8')}"})
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Diagram image generation failed: {e}")
+
+@app.post("/api/project/{project_id}/append-diagram")
+async def append_diagram_to_project(project_id: str, request: AppendDiagramRequest):
+    project = ProjectStore.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if not request.content.strip():
+        raise HTTPException(status_code=400, detail="Content is required")
+
+    try:
+        data = await _generate_diagram_image_data(request.content)
+        diagrams_dir = Path("backend/beta/static/diagrams")
+        diagrams_dir.mkdir(parents=True, exist_ok=True)
+        filename = f"{project_id}_diagram_{int(time.time())}.png"
+        image_path = diagrams_dir / filename
+        image_path.write_bytes(data)
+
+        image_url = f"/static/diagrams/{filename}"
+        caption = (request.caption or "Studio Diagram").strip()
+        markdown_block = f"\n\n## {caption}\n\n![{caption}]({image_url})\n"
+        project.contentMarkdown = (project.contentMarkdown or "") + markdown_block
+
+        updated_document_url = project.documentUrl
+        doc_path = _resolve_docx_path(project.documentUrl or "")
+        if doc_path and doc_path.exists():
+            doc = Document(doc_path)
+            doc.add_page_break()
+            doc.add_heading(caption, level=1)
+            doc.add_paragraph("Generated from DocuVerse Studio.")
+            doc.add_picture(str(image_path), width=Inches(6.5))
+            doc.save(doc_path)
+        else:
+            updated_document_url = project.documentUrl
+
+        ProjectStore.save_project(project)
+        return JSONResponse(content={
+            "imageUrl": image_url,
+            "documentUrl": updated_document_url,
+            "contentMarkdown": project.contentMarkdown
+        })
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Append diagram failed: {e}")
 
 # --- DocuVerse Studio & Project Endpoints ---
 

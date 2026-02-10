@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, BrainCircuit, FileText, MessageSquare, ChevronRight, Zap, X, Send, Bot, User, Workflow, MousePointer2, Plus, Share2, Download, Settings, Database, Server, Smartphone, Globe, Layout, Search, Clock, CheckCircle, AlertCircle, Mail } from 'lucide-react';
+import { Sparkles, BrainCircuit, FileText, MessageSquare, ChevronRight, Zap, X, Send, Bot, User, Workflow, MousePointer2, Plus, Share2, Download, Settings, Database, Server, Smartphone, Globe, Layout, Search, Clock, CheckCircle, AlertCircle, Mail, Image as ImageIcon, RefreshCw } from 'lucide-react';
 import axios from 'axios';
 import ReactFlow, { Background, Controls, MiniMap, applyNodeChanges, applyEdgeChanges } from 'reactflow';
 import 'reactflow/dist/style.css';
@@ -42,14 +42,51 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
     ]);
     const [chatInput, setChatInput] = useState("");
     const [chatLoading, setChatLoading] = useState(false);
+    const [chatImageLoading, setChatImageLoading] = useState(false);
+    const [chatDiagramEnabled, setChatDiagramEnabled] = useState(false);
+    const [chatDiagramReason, setChatDiagramReason] = useState("");
+    const [chatDiagramStatusLoading, setChatDiagramStatusLoading] = useState(false);
+    const [chatPhotoEnabled, setChatPhotoEnabled] = useState(false);
+    const [chatPhotoReason, setChatPhotoReason] = useState("");
+    const [chatPhotoStatusLoading, setChatPhotoStatusLoading] = useState(false);
+    const [chatMode, setChatMode] = useState("text"); // text | image
+    const [chatImageType, setChatImageType] = useState("diagram"); // diagram | photo
+    const [lastDiagramImage, setLastDiagramImage] = useState(null);
 
     // --- Diagram State ---
     const [nodes, setNodes] = useState([]);
     const [edges, setEdges] = useState([]);
     const [loadingDiagram, setLoadingDiagram] = useState(false);
+    const [diagramImageLoading, setDiagramImageLoading] = useState(false);
+    const [diagramImageError, setDiagramImageError] = useState("");
 
     // --- UI State ---
     const [activeTab, setActiveTab] = useState('insights'); // 'insights' | 'chat' | 'diagram'
+
+    const imagePresets = [
+        { id: 'arch', label: 'System Architecture' },
+        { id: 'er', label: 'ER Diagram' },
+        { id: 'seq', label: 'Sequence Flow' },
+        { id: 'userflow', label: 'User Flow' }
+    ];
+
+    const buildImagePromptFromNotes = (preset) => {
+        const base = "Create a clean, professional, blueprint-style diagram image. Use vector shapes, high contrast, minimal text (1-2 word labels), no paragraphs, no tiny text.";
+        const context = content.slice(0, 1200);
+        if (preset === 'arch') {
+            return `${base} Title: System Architecture. Context: ${context}. Show 5-7 labeled components with clear connections and spacing.`;
+        }
+        if (preset === 'er') {
+            return `${base} Title: Entity-Relationship Diagram. Context: ${context}. Show 5-7 entities with short attribute lists and relationships.`;
+        }
+        if (preset === 'seq') {
+            return `${base} Title: Sequence Flow. Context: ${context}. Show 5-7 actors/services with arrows for interactions.`;
+        }
+        if (preset === 'userflow') {
+            return `${base} Title: User Flow. Context: ${context}. Show 5-7 steps with arrows.`;
+        }
+        return `${base} Context: ${context}.`;
+    };
 
     // --- Effects ---
     useEffect(() => {
@@ -70,6 +107,43 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
         analyzeNotebook();
     }, [debouncedContent]);
 
+    const refreshChatDiagramStatus = async () => {
+        setChatDiagramStatusLoading(true);
+        try {
+            const res = await axios.get('/api/notebook/diagram-image/status');
+            setChatDiagramEnabled(Boolean(res.data?.enabled));
+            setChatDiagramReason(res.data?.reason || "");
+            return Boolean(res.data?.enabled);
+        } catch {
+            setChatDiagramEnabled(false);
+            setChatDiagramReason("Status check failed");
+            return false;
+        } finally {
+            setChatDiagramStatusLoading(false);
+        }
+    };
+
+    const refreshChatPhotoStatus = async () => {
+        setChatPhotoStatusLoading(true);
+        try {
+            const res = await axios.get('/api/notebook/image/status');
+            setChatPhotoEnabled(Boolean(res.data?.enabled));
+            setChatPhotoReason(res.data?.reason || "");
+            return Boolean(res.data?.enabled);
+        } catch {
+            setChatPhotoEnabled(false);
+            setChatPhotoReason("Status check failed");
+            return false;
+        } finally {
+            setChatPhotoStatusLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        refreshChatDiagramStatus();
+        refreshChatPhotoStatus();
+    }, []);
+
     useEffect(() => {
         if (initialStatus !== lastStatusRef.current) {
             lastStatusRef.current = initialStatus;
@@ -87,6 +161,23 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
 
     const handleSendMessage = async () => {
         if (!chatInput.trim()) return;
+        if (chatInput.trim().toLowerCase().startsWith('/image ')) {
+            const prompt = chatInput.trim().slice(7);
+            await handleGenerateChatImage(prompt, "photo");
+            setChatInput("");
+            return;
+        }
+        if (chatInput.trim().toLowerCase().startsWith('/diagram ')) {
+            const prompt = chatInput.trim().slice(9);
+            await handleGenerateChatImage(prompt, "diagram");
+            setChatInput("");
+            return;
+        }
+        if (chatMode === "image") {
+            await handleGenerateChatImage(chatInput, chatImageType);
+            setChatInput("");
+            return;
+        }
         const newMsg = { role: 'user', text: chatInput };
         setChatMessages(prev => [...prev, newMsg]);
         setChatInput("");
@@ -103,6 +194,76 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
             setChatMessages(prev => [...prev, { role: 'ai', text: "Error connecting to AI." }]);
         } finally {
             setChatLoading(false);
+        }
+    };
+
+    const handleGenerateChatImage = async (text, typeOverride) => {
+        if (!text) return;
+        const type = typeOverride || chatImageType;
+        const enabled = type === "diagram"
+            ? (chatDiagramEnabled || (await refreshChatDiagramStatus()))
+            : (chatPhotoEnabled || (await refreshChatPhotoStatus()));
+        if (!enabled) {
+            const reason = type === "diagram"
+                ? (chatDiagramReason || 'Diagram generation is disabled.')
+                : (chatPhotoReason || 'Image generation is disabled.');
+            setChatMessages(prev => [...prev, { role: 'ai', text: `Image generation is off. ${reason}` }]);
+            return;
+        }
+        setChatImageLoading(true);
+        setChatMessages(prev => [...prev, { role: 'user', text: `Generate image: ${text}` }]);
+        try {
+            const endpoint = type === "diagram" ? '/api/notebook/diagram-image' : '/api/notebook/image';
+            const res = await axios.post(endpoint, { prompt: text });
+            if (res.data?.image) {
+                if (type === "diagram") {
+                    setLastDiagramImage(res.data.image);
+                }
+                setChatMessages(prev => [...prev, { role: 'ai', type: 'image', imageUrl: res.data.image, text, imageType: type }]);
+            } else {
+                setChatMessages(prev => [...prev, { role: 'ai', text: "No image returned. Try a different prompt." }]);
+            }
+        } catch (error) {
+            const msg = error.response?.data?.detail || "Image generation failed. Check backend connection.";
+            setChatMessages(prev => [...prev, { role: 'ai', text: msg }]);
+        } finally {
+            setChatImageLoading(false);
+        }
+    };
+
+    const downloadImage = (dataUrl, filename) => {
+        const link = document.createElement("a");
+        link.href = dataUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const appendLastDiagramToSrs = async () => {
+        if (!projectId) {
+            setDiagramImageError("Project not found. Save this document first.");
+            return;
+        }
+        if (!content.trim()) {
+            setDiagramImageError("No content available.");
+            return;
+        }
+        setDiagramImageLoading(true);
+        setDiagramImageError("");
+        try {
+            const res = await axios.post(`/api/project/${projectId}/append-diagram`, {
+                content,
+                caption: "Studio Diagram"
+            });
+            if (res.data?.contentMarkdown) {
+                setContent(res.data.contentMarkdown);
+            }
+        } catch (error) {
+            const msg = error.response?.data?.detail || "Append diagram failed.";
+            setDiagramImageError(msg);
+        } finally {
+            setDiagramImageLoading(false);
         }
     };
 
@@ -140,6 +301,54 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
             console.error("Diagram Gen Failed", error);
         } finally {
             setLoadingDiagram(false);
+        }
+    };
+
+    const handleDownloadDiagramImage = async () => {
+        if (!content.trim()) return;
+        setDiagramImageLoading(true);
+        setDiagramImageError("");
+        try {
+            const res = await axios.post('/api/notebook/diagram-image', { prompt: content });
+            if (res.data?.image) {
+                const link = document.createElement("a");
+                link.href = res.data.image;
+                link.download = "studio-diagram.png";
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } else {
+                setDiagramImageError("No image returned. Try again.");
+            }
+        } catch (error) {
+            const msg = error.response?.data?.detail || "Diagram image failed.";
+            setDiagramImageError(msg);
+        } finally {
+            setDiagramImageLoading(false);
+        }
+    };
+
+    const handleAppendDiagramToDoc = async () => {
+        if (!content.trim()) return;
+        if (!projectId) {
+            setDiagramImageError("Project not found. Save this document first.");
+            return;
+        }
+        setDiagramImageLoading(true);
+        setDiagramImageError("");
+        try {
+            const res = await axios.post(`/api/project/${projectId}/append-diagram`, {
+                content,
+                caption: "Studio Diagram"
+            });
+            if (res.data?.contentMarkdown) {
+                setContent(res.data.contentMarkdown);
+            }
+        } catch (error) {
+            const msg = error.response?.data?.detail || "Append diagram failed.";
+            setDiagramImageError(msg);
+        } finally {
+            setDiagramImageLoading(false);
         }
     };
 
@@ -483,6 +692,71 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
                             {/* --- TAB: CHAT --- */}
                             {activeTab === 'chat' && (
                                 <div className="h-full flex flex-col">
+                                    <div className="border-b border-[#30363d] bg-[#0d1117]/50 px-4 py-3 flex flex-col gap-3">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <button
+                                                onClick={refreshChatDiagramStatus}
+                                                className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${chatDiagramEnabled ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e]'} ${chatDiagramStatusLoading ? 'opacity-70' : 'hover:border-[#3fb950] hover:text-[#3fb950]'}`}
+                                                title={chatDiagramEnabled ? 'Diagram enabled. Click to refresh.' : `Diagram disabled: ${chatDiagramReason || 'Unknown reason'}`}
+                                                disabled={chatDiagramStatusLoading}
+                                            >
+                                                <RefreshCw size={12} className={chatDiagramStatusLoading ? 'animate-spin' : ''} />
+                                                {chatDiagramEnabled ? 'Diagram On' : 'Diagram Off'}
+                                            </button>
+                                            <button
+                                                onClick={refreshChatPhotoStatus}
+                                                className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${chatPhotoEnabled ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e]'} ${chatPhotoStatusLoading ? 'opacity-70' : 'hover:border-[#3fb950] hover:text-[#3fb950]'}`}
+                                                title={chatPhotoEnabled ? 'Image enabled. Click to refresh.' : `Image disabled: ${chatPhotoReason || 'Unknown reason'}`}
+                                                disabled={chatPhotoStatusLoading}
+                                            >
+                                                <RefreshCw size={12} className={chatPhotoStatusLoading ? 'animate-spin' : ''} />
+                                                {chatPhotoEnabled ? 'Image On' : 'Image Off'}
+                                            </button>
+                                            <button
+                                                onClick={() => setChatMode((prev) => (prev === "image" ? "text" : "image"))}
+                                                className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${chatMode === 'image' ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e]'} ${chatMode === 'image' && chatImageType === 'diagram' && !chatDiagramEnabled ? 'opacity-50 cursor-not-allowed' : ''} ${chatMode === 'image' && chatImageType === 'photo' && !chatPhotoEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                title="Toggle image mode"
+                                                disabled={chatMode === 'image' && ((chatImageType === 'diagram' && !chatDiagramEnabled) || (chatImageType === 'photo' && !chatPhotoEnabled))}
+                                            >
+                                                <ImageIcon size={12} />
+                                                {chatMode === 'image' ? 'Image Mode' : 'Text Mode'}
+                                            </button>
+                                            <div className="flex items-center gap-1">
+                                                <button
+                                                    onClick={() => setChatImageType("diagram")}
+                                                    className={`text-xs px-2 py-0.5 rounded border transition ${chatImageType === 'diagram' ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e]'}`}
+                                                    disabled={!chatDiagramEnabled}
+                                                    title={chatDiagramEnabled ? 'Use diagram generation' : `Diagram disabled: ${chatDiagramReason}`}
+                                                >
+                                                    Diagram
+                                                </button>
+                                                <button
+                                                    onClick={() => setChatImageType("photo")}
+                                                    className={`text-xs px-2 py-0.5 rounded border transition ${chatImageType === 'photo' ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e]'}`}
+                                                    disabled={!chatPhotoEnabled}
+                                                    title={chatPhotoEnabled ? 'Use image generation' : `Image disabled: ${chatPhotoReason}`}
+                                                >
+                                                    Image
+                                                </button>
+                                            </div>
+                                            <span className="text-[11px] text-[#8b949e]">
+                                                I can style the Mermaid output further or add color themes and grouping.
+                                            </span>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                            {imagePresets.map((preset) => (
+                                                <button
+                                                    key={preset.id}
+                                                    onClick={() => handleGenerateChatImage(buildImagePromptFromNotes(preset.id), "diagram")}
+                                                    disabled={!chatDiagramEnabled || chatImageLoading}
+                                                    className="px-3 py-1.5 text-xs rounded-lg border border-[#30363d] bg-[#0d1117] text-[#8b949e] hover:text-[#3fb950] hover:border-[#3fb950] transition disabled:opacity-50"
+                                                    title={chatDiagramEnabled ? `Generate ${preset.label}` : `Diagram disabled: ${chatDiagramReason}`}
+                                                >
+                                                    {preset.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
                                     <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-[#30363d]">
                                         {chatMessages.map((msg, i) => (
                                             <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
@@ -491,11 +765,34 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
                                                     {msg.role === 'ai' ? <Bot size={14} /> : <User size={14} />}
                                                 </div>
                                                 <div className={`p-3 rounded-xl max-w-[85%] text-sm ${msg.role === 'ai' ? 'bg-[#21262d] text-[#c9d1d9]' : 'bg-[#1f6feb] text-white'}`}>
-                                                    {msg.text}
+                                                    {msg.type === 'image' ? (
+                                                        <div className="space-y-2">
+                                                            <img src={msg.imageUrl} alt={msg.text} className="rounded-lg border border-[#30363d]" />
+                                                            {msg.imageType === 'diagram' && (
+                                                                <div className="flex gap-2">
+                                                                    <button
+                                                                        onClick={() => downloadImage(msg.imageUrl, 'studio-diagram.png')}
+                                                                        className="px-2 py-1 text-xs rounded border border-[#30363d] text-[#8b949e] hover:text-[#c9d1d9] hover:border-[#c9d1d9] transition"
+                                                                    >
+                                                                        Download Diagram
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={appendLastDiagramToSrs}
+                                                                        className="px-2 py-1 text-xs rounded border border-[#a371f7] text-[#a371f7] hover:bg-[#a371f7]/10 transition"
+                                                                    >
+                                                                        Add to SRS
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                            <div className="text-xs text-[#8b949e]">{msg.text}</div>
+                                                        </div>
+                                                    ) : (
+                                                        msg.text
+                                                    )}
                                                 </div>
                                             </div>
                                         ))}
-                                        {chatLoading && (
+                                        {(chatLoading || chatImageLoading) && (
                                             <div className="flex gap-3">
                                                 <div className="w-8 h-8 rounded-full bg-[#a371f7]/10 text-[#a371f7] flex items-center justify-center shrink-0"><Bot size={14} /></div>
                                                 <div className="bg-[#21262d] p-3 rounded-xl flex gap-1 items-center">
@@ -511,7 +808,9 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
                                             <input
                                                 type="text"
                                                 className="w-full bg-[#161b22] border border-[#30363d] rounded-lg pl-4 pr-10 py-3 text-sm text-white focus:border-[#a371f7] outline-none transition-colors"
-                                                placeholder="Ask about your notes..."
+                                                placeholder={chatMode === 'image'
+                                                    ? (chatImageType === 'diagram' ? "Describe the diagram to generate..." : "Describe the image to generate...")
+                                                    : "Ask about your notes or type /diagram or /image prompt"}
                                                 value={chatInput}
                                                 onChange={(e) => setChatInput(e.target.value)}
                                                 onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
@@ -531,7 +830,7 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
                             {activeTab === 'diagram' && (
                                 <div className="h-full relative bg-[#010409]">
                                     {/* Generate Button Overlay */}
-                                    <div className="absolute top-4 right-4 z-50">
+                                    <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
                                         <button
                                             onClick={generateDiagram}
                                             disabled={loadingDiagram}
@@ -540,7 +839,29 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
                                             {loadingDiagram ? <div className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin"></div> : <Workflow size={14} />}
                                             {loadingDiagram ? 'Generating...' : 'Generate New Diagram'}
                                         </button>
+                                        <button
+                                            onClick={handleDownloadDiagramImage}
+                                            disabled={diagramImageLoading}
+                                            className="px-3 py-1.5 bg-[#21262d] text-white text-xs font-bold rounded shadow-lg hover:bg-[#30363d] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                        >
+                                            {diagramImageLoading ? <div className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin"></div> : <Download size={14} />}
+                                            Download Image
+                                        </button>
+                                        <button
+                                            onClick={handleAppendDiagramToDoc}
+                                            disabled={diagramImageLoading}
+                                            className="px-3 py-1.5 bg-[#a371f7] text-white text-xs font-bold rounded shadow-lg hover:bg-[#8957e5] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                        >
+                                            {diagramImageLoading ? <div className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin"></div> : <Share2 size={14} />}
+                                            Add to SRS
+                                        </button>
                                     </div>
+
+                                    {diagramImageError && (
+                                        <div className="absolute top-16 right-4 z-50 text-xs text-[#ff7b72] bg-[#0d1117] border border-[#30363d] rounded px-3 py-2">
+                                            {diagramImageError}
+                                        </div>
+                                    )}
 
                                     {nodes.length === 0 && !loadingDiagram && (
                                         <div className="absolute inset-0 flex flex-col items-center justify-center text-[#8b949e] z-40 pointer-events-none">

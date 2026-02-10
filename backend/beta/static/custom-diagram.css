@@ -7,7 +7,7 @@ svg {
 .node ellipse,
 .node polygon,
 .node path {
-  stroke-width: 1.8px !important;
+  stroke-width: 2.2px !important;
 }
 
 .cluster rect {
@@ -17,11 +17,11 @@ svg {
 }
 
 .edgePath path {
-  stroke-width: 1.6px !important;
+  stroke-width: 2px !important;
 }
 
 .edgeLabel {
   background-color: #ffffff !important;
   color: #1f2937 !important;
-  font-size: 13px !important;
+  font-size: 14px !important;
 }
