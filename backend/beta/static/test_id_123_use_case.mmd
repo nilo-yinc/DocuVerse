@@ -1,0 +1,11 @@
+flowchart LR
+    subgraph Actors
+        direction TB
+        A0["Developers"]
+    end
+    subgraph UseCases
+        UC0["User Auth"]
+        UC1["Data Sync"]
+    end
+    A0 --> UC0
+    A0 --> UC1
