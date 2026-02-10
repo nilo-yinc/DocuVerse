@@ -1,0 +1,14 @@
+flowchart LR
+    A([User starts session]) --> B[Authenticate]
+    B --> C{Valid credentials?}
+    C -->|No| D[Show error and retry]
+    D --> B
+    C -->|Yes| E[Open role-based dashboard]
+    E --> F[Select module]
+    F --> G[Submit action/request]
+    G --> H[Business validation]
+    H --> I[Persist data & trigger events]
+    I --> J[Render result/report]
+    J --> K{More actions?}
+    K -->|Yes| F
+    K -->|No| L([Logout])

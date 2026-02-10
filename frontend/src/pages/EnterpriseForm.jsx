@@ -26,6 +26,7 @@ const EnterpriseForm = () => {
         // 2. System Context
         appType: '', // Web, Mobile, etc
         domain: '', // FinTech, Health, etc
+        domain_other: '',
 
         // 3. Functional Scope
         coreFeatures: '', // per line
@@ -33,7 +34,9 @@ const EnterpriseForm = () => {
 
         // 4. Non-Functional
         userScale: '',
+        userScale_other: '',
         performance: '',
+        performance_other: '',
 
         // 5. Security
         authRequired: 'Yes',
@@ -42,8 +45,11 @@ const EnterpriseForm = () => {
 
         // 6. Technical
         backendPref: '',
+        backendPref_other: '',
         dbPref: '',
+        dbPref_other: '',
         deploymentPref: '',
+        deploymentPref_other: '',
 
         // 7. Output
         detailLevel: 'Professional',
@@ -134,19 +140,49 @@ const EnterpriseForm = () => {
         </div>
     );
 
-    const renderSelect = (label, field, options) => (
-        <div className="mb-6">
-            <label className="block text-neon-blue text-sm font-bold mb-2 uppercase">{label} <span className="text-red-500">*</span></label>
-            <select
-                value={formData[field]}
-                onChange={e => updateField(field, e.target.value)}
-                className="w-full bg-dark-input border border-gray-700 rounded p-3 text-white focus:border-neon-blue outline-none"
-            >
-                <option value="">Select...</option>
-                {options.map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
-        </div>
-    );
+    const renderSelect = (label, field, options) => {
+        const isOtherSelected = formData[field] === 'Other';
+        const otherField = `${field}_other`;
+
+        return (
+            <div className="mb-6">
+                <label className="block text-neon-blue text-sm font-bold mb-2 uppercase">{label} <span className="text-red-500">*</span></label>
+                <select
+                    value={isOtherSelected ? 'Other' : formData[field]}
+                    onChange={e => {
+                        const val = e.target.value;
+                        if (val === 'Other') {
+                            updateField(field, 'Other');
+                        } else {
+                            updateField(field, val);
+                            updateField(otherField, '');
+                        }
+                    }}
+                    className="w-full bg-dark-input border border-gray-700 rounded p-3 text-white focus:border-neon-blue outline-none"
+                >
+                    <option value="">Select...</option>
+                    {options.map(o => <option key={o} value={o}>{o}</option>)}
+                    <option value="Other">Other (Specify)</option>
+                </select>
+
+                {isOtherSelected && (
+                    <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        className="mt-3"
+                    >
+                        <input
+                            type="text"
+                            value={formData[otherField] || ''}
+                            onChange={e => updateField(otherField, e.target.value)}
+                            className="w-full bg-dark-input border border-neon-blue/50 rounded p-3 text-white focus:border-neon-blue outline-none placeholder:text-gray-600"
+                            placeholder={`Specify other ${label.toLowerCase()}...`}
+                        />
+                    </motion.div>
+                )}
+            </div>
+        );
+    };
 
     return (
         <div className="min-h-screen bg-dark-bg text-white font-sans flex flex-col">

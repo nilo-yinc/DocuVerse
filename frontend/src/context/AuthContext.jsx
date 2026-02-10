@@ -89,19 +89,41 @@ export const AuthProvider = ({ children }) => {
     const updateProfile = async (data) => {
         try {
             const res = await api.put('/users/update-profile', data);
-            if (res.data.success) {
+            if (res.data.status || res.data.success) {
                 setUser({ ...user, ...res.data.user });
                 return { success: true, msg: "Profile updated successfully" };
             }
             return { success: false, msg: res.data.message || "Update failed" };
         } catch (err) {
             console.error("Profile update error", err);
-            return { success: false, msg: err.response?.data?.message || "Update failed" };
+            const detail = err.response?.data?.detail;
+            const message = err.response?.data?.message || "Update failed";
+            return { success: false, msg: detail ? `${message}: ${detail}` : message };
+        }
+    };
+
+    const requestPasswordOTP = async () => {
+        try {
+            const res = await api.post('/users/request-password-otp');
+            return { success: res.data.status, msg: res.data.message };
+        } catch (err) {
+            const detail = err.response?.data?.detail;
+            const message = err.response?.data?.message || "Failed to send code";
+            return { success: false, msg: detail ? `${message}: ${detail}` : message };
+        }
+    };
+
+    const verifyPasswordOTP = async (otp, newPassword) => {
+        try {
+            const res = await api.post('/users/verify-password-otp', { otp, newPassword });
+            return { success: res.data.status, msg: res.data.message };
+        } catch (err) {
+            return { success: false, msg: err.response?.data?.message || "Verification failed" };
         }
     };
 
     return (
-        <AuthContext.Provider value={{ user, token, loading, login, register, logout, updateProfile }}>
+        <AuthContext.Provider value={{ user, token, loading, login, register, logout, updateProfile, requestPasswordOTP, verifyPasswordOTP }}>
             {children}
         </AuthContext.Provider>
     );

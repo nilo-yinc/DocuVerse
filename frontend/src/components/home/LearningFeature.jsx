@@ -106,23 +106,33 @@ const LearningFeature = () => {
                 {/* Concept Carousel - Spotlight Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
                     {concepts.map((item, index) => (
-                        <motion.div
-                            key={index}
-                            initial={{ opacity: 0, y: 20 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ delay: index * 0.1 }}
-                        >
-                            <CardSpotlight className="h-full cursor-pointer group" radius={200}>
-                                <div className={`w-12 h-12 rounded-lg ${item.bg} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform relative z-20`}>
-                                    <item.icon className={item.color} size={24} />
-                                </div>
-                                <h3 className="text-white font-bold mb-2 group-hover:text-[#f2cc60] transition-colors relative z-20">{item.title}</h3>
-                                <p className="text-sm text-[#8b949e] leading-relaxed line-clamp-3 relative z-20">
-                                    {item.desc}
-                                </p>
-                            </CardSpotlight>
-                        </motion.div>
+                        <CardContainer key={index} containerClassName="py-0 h-full" className="h-full">
+                            <CardBody className="h-full w-full">
+                                <motion.div
+                                    initial={{ opacity: 0, y: 20 }}
+                                    whileInView={{ opacity: 1, y: 0 }}
+                                    viewport={{ once: true }}
+                                    transition={{ delay: index * 0.1 }}
+                                    className="h-full"
+                                >
+                                    <CardSpotlight className="h-full cursor-pointer group" radius={200}>
+                                        <CardItem translateZ="50" className="w-full">
+                                            <div className={`w-12 h-12 rounded-lg ${item.bg} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform relative z-20`}>
+                                                <item.icon className={item.color} size={24} />
+                                            </div>
+                                        </CardItem>
+                                        <CardItem translateZ="60" className="w-full">
+                                            <h3 className="text-white font-bold mb-2 group-hover:text-[#f2cc60] transition-colors relative z-20">{item.title}</h3>
+                                        </CardItem>
+                                        <CardItem translateZ="40" className="w-full">
+                                            <p className="text-sm text-[#8b949e] leading-relaxed line-clamp-3 relative z-20">
+                                                {item.desc}
+                                            </p>
+                                        </CardItem>
+                                    </CardSpotlight>
+                                </motion.div>
+                            </CardBody>
+                        </CardContainer>
                     ))}
                 </div>
 

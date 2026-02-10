@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Workflow, MousePointer2, Plus, Share2, Download, Settings, Database, Server, Smartphone, Globe } from 'lucide-react';
+import { CardContainer, CardBody, CardItem } from '../ui/Card3D';
 
 const DiagramFeature = () => {
 
@@ -54,118 +55,129 @@ const DiagramFeature = () => {
                 </div>
 
                 {/* Interactive Playground Surface */}
-                <div className="relative h-[500px] bg-[#0d1117] border border-[#30363d] rounded-xl shadow-2xl overflow-hidden group select-none">
+                <CardContainer containerClassName="py-0 inter-var" className="w-full">
+                    <CardBody className="w-full relative">
+                        <CardItem translateZ="50" className="w-full">
+                            <div className="relative h-[500px] bg-[#0d1117] border border-[#30363d] rounded-xl shadow-2xl overflow-hidden group select-none">
 
-                    {/* Toolbar */}
-                    <div className="absolute top-4 left-4 flex flex-col gap-2 z-20">
-                        {[Database, Server, Globe, Smartphone].map((Icon, i) => (
-                            <div key={i} className="p-3 bg-[#161b22] border border-[#30363d] rounded-lg text-[#8b949e] hover:text-white hover:border-[#7ee787] hover:bg-[#1f2428] cursor-grab transition shadow-md">
-                                <Icon size={20} />
-                            </div>
-                        ))}
-                        <div className="w-8 h-[1px] bg-[#30363d] mx-auto my-1"></div>
-                        <div className="p-3 bg-[#161b22] border border-[#30363d] rounded-lg text-[#8b949e] hover:text-white cursor-pointer transition">
-                            <Plus size={20} />
-                        </div>
-                    </div>
+                                {/* Toolbar */}
+                                <CardItem translateZ="100" className="absolute top-4 left-4 flex flex-col gap-2 z-20">
+                                    {[Database, Server, Globe, Smartphone].map((Icon, i) => (
+                                        <div key={i} className="p-3 bg-[#161b22] border border-[#30363d] rounded-lg text-[#8b949e] hover:text-white hover:border-[#7ee787] hover:bg-[#1f2428] cursor-grab transition shadow-md">
+                                            <Icon size={20} />
+                                        </div>
+                                    ))}
+                                    <div className="w-8 h-[1px] bg-[#30363d] mx-auto my-1"></div>
+                                    <div className="p-3 bg-[#161b22] border border-[#30363d] rounded-lg text-[#8b949e] hover:text-white cursor-pointer transition">
+                                        <Plus size={20} />
+                                    </div>
+                                </CardItem>
 
-                    {/* Canvas Area */}
-                    <div className="w-full h-full relative">
-                        {/* Connecting Lines (SVG) */}
-                        <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
-                            <motion.path
-                                d="M 250 150 L 450 150"
-                                stroke="#30363d"
-                                strokeWidth="2"
-                                strokeDasharray="5,5"
-                                initial={{ pathLength: 0, opacity: 0 }}
-                                whileInView={{ pathLength: 1, opacity: 1 }}
-                                transition={{ duration: 1, delay: 0.5 }}
-                            />
-                            <motion.path
-                                d="M 500 200 L 500 300"
-                                stroke="#30363d"
-                                strokeWidth="2"
-                                initial={{ pathLength: 0, opacity: 0 }}
-                                whileInView={{ pathLength: 1, opacity: 1 }}
-                                transition={{ duration: 1, delay: 0.8 }}
-                            />
-                            <motion.path
-                                d="M 550 350 L 700 350"
-                                stroke="#30363d"
-                                strokeWidth="2"
-                                initial={{ pathLength: 0, opacity: 0 }}
-                                whileInView={{ pathLength: 1, opacity: 1 }}
-                                transition={{ duration: 1, delay: 1.1 }}
-                            />
-                        </svg>
+                                {/* Canvas Area */}
+                                <div className="w-full h-full relative">
+                                    {/* Connecting Lines (SVG) */}
+                                    <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
+                                        <motion.path
+                                            d="M 250 150 L 450 150"
+                                            stroke="#30363d"
+                                            strokeWidth="2"
+                                            strokeDasharray="5,5"
+                                            initial={{ pathLength: 0, opacity: 0 }}
+                                            whileInView={{ pathLength: 1, opacity: 1 }}
+                                            transition={{ duration: 1, delay: 0.5 }}
+                                        />
+                                        <motion.path
+                                            d="M 500 200 L 500 300"
+                                            stroke="#30363d"
+                                            strokeWidth="2"
+                                            initial={{ pathLength: 0, opacity: 0 }}
+                                            whileInView={{ pathLength: 1, opacity: 1 }}
+                                            transition={{ duration: 1, delay: 0.8 }}
+                                        />
+                                        <motion.path
+                                            d="M 550 350 L 700 350"
+                                            stroke="#30363d"
+                                            strokeWidth="2"
+                                            initial={{ pathLength: 0, opacity: 0 }}
+                                            whileInView={{ pathLength: 1, opacity: 1 }}
+                                            transition={{ duration: 1, delay: 1.1 }}
+                                        />
+                                    </svg>
 
-                        {/* Nodes */}
-                        {initialNodes.map((node, index) => (
-                            <motion.div
-                                key={node.id}
-                                initial={{ scale: 0, opacity: 0 }}
-                                whileInView={{ scale: 1, opacity: 1 }}
-                                viewport={{ once: true }}
-                                transition={{ type: "spring", stiffness: 260, damping: 20, delay: 0.2 + (index * 0.1) }}
-                                drag
-                                dragConstraints={{ left: 0, right: 800, top: 0, bottom: 400 }}
-                                whileDrag={{ scale: 1.1, cursor: "grabbing" }}
-                                className="absolute bg-[#161b22] border border-[#30363d] p-4 rounded-xl shadow-xl flex flex-col items-center gap-2 cursor-grab w-32 z-10 group/node hover:border-[#7ee787] active:border-[#7ee787] active:ring-2 ring-[#7ee787]/20"
-                                style={{ top: node.y, left: node.x }}
-                            >
-                                <div className={`p-3 rounded-full bg-[#0d1117] border border-[#30363d] 
-                                    ${node.type === 'db' ? 'text-blue-400' : ''}
-                                    ${node.type === 'server' ? 'text-purple-400' : ''}
-                                    ${node.type === 'api' ? 'text-green-400' : ''}
-                                    ${node.type === 'client' ? 'text-orange-400' : ''}
-                                `}>
-                                    <node.icon size={24} />
+                                    {/* Nodes */}
+                                    {initialNodes.map((node, index) => (
+                                        <CardItem
+                                            key={node.id}
+                                            translateZ={70 + (index * 10)}
+                                            className="absolute p-0"
+                                            style={{ top: node.y, left: node.x }}
+                                        >
+                                            <motion.div
+                                                initial={{ scale: 0, opacity: 0 }}
+                                                whileInView={{ scale: 1, opacity: 1 }}
+                                                viewport={{ once: true }}
+                                                transition={{ type: "spring", stiffness: 260, damping: 20, delay: 0.2 + (index * 0.1) }}
+                                                drag
+                                                dragConstraints={{ left: 0, right: 800, top: 0, bottom: 400 }}
+                                                whileDrag={{ scale: 1.1, cursor: "grabbing" }}
+                                                className="bg-[#161b22] border border-[#30363d] p-4 rounded-xl shadow-xl flex flex-col items-center gap-2 cursor-grab w-32 z-10 group/node hover:border-[#7ee787] active:border-[#7ee787] active:ring-2 ring-[#7ee787]/20"
+                                            >
+                                                <div className={`p-3 rounded-full bg-[#0d1117] border border-[#30363d] 
+                                                    ${node.type === 'db' ? 'text-blue-400' : ''}
+                                                    ${node.type === 'server' ? 'text-purple-400' : ''}
+                                                    ${node.type === 'api' ? 'text-green-400' : ''}
+                                                    ${node.type === 'client' ? 'text-orange-400' : ''}
+                                                `}>
+                                                    <node.icon size={24} />
+                                                </div>
+                                                <span className="text-xs font-bold text-[#c9d1d9]">{node.label}</span>
+
+                                                {/* Anchors */}
+                                                <div className="absolute -right-1 top-1/2 w-2 h-2 bg-[#8b949e] rounded-full opacity-0 group-hover/node:opacity-100"></div>
+                                                <div className="absolute -left-1 top-1/2 w-2 h-2 bg-[#8b949e] rounded-full opacity-0 group-hover/node:opacity-100"></div>
+                                                <div className="absolute -bottom-1 left-1/2 w-2 h-2 bg-[#8b949e] rounded-full opacity-0 group-hover/node:opacity-100"></div>
+                                            </motion.div>
+                                        </CardItem>
+                                    ))}
+
+                                    {/* Cursor Mock */}
+                                    <motion.div
+                                        initial={{ x: 800, y: 400, opacity: 0 }}
+                                        animate={{ x: [800, 720, 480, 800], y: [400, 320, 320, 400], opacity: 1 }}
+                                        transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+                                        className="absolute z-50 pointer-events-none"
+                                    >
+                                        <MousePointer2 className="text-white fill-black drop-shadow-lg" />
+                                        <div className="ml-4 mt-2 bg-[#7ee787] text-black text-xs font-bold px-2 py-1 rounded shadow-lg">
+                                            Niloy (You)
+                                        </div>
+                                    </motion.div>
                                 </div>
-                                <span className="text-xs font-bold text-[#c9d1d9]">{node.label}</span>
 
-                                {/* Anchors */}
-                                <div className="absolute -right-1 top-1/2 w-2 h-2 bg-[#8b949e] rounded-full opacity-0 group-hover/node:opacity-100"></div>
-                                <div className="absolute -left-1 top-1/2 w-2 h-2 bg-[#8b949e] rounded-full opacity-0 group-hover/node:opacity-100"></div>
-                                <div className="absolute -bottom-1 left-1/2 w-2 h-2 bg-[#8b949e] rounded-full opacity-0 group-hover/node:opacity-100"></div>
-                            </motion.div>
-                        ))}
-
-                        {/* Cursor Mock */}
-                        <motion.div
-                            initial={{ x: 800, y: 400, opacity: 0 }}
-                            animate={{ x: [800, 720, 480, 800], y: [400, 320, 320, 400], opacity: 1 }}
-                            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-                            className="absolute z-50 pointer-events-none"
-                        >
-                            <MousePointer2 className="text-white fill-black drop-shadow-lg" />
-                            <div className="ml-4 mt-2 bg-[#7ee787] text-black text-xs font-bold px-2 py-1 rounded shadow-lg">
-                                Niloy (You)
+                                {/* Property Panel Mock (Bottom Right) */}
+                                <CardItem translateZ="80" className="absolute bottom-4 right-4 w-64 bg-[#161b22] border border-[#30363d] rounded-lg p-4 shadow-2xl opacity-90 backdrop-blur-sm z-30">
+                                    <div className="flex justify-between items-center mb-4 text-xs text-[#8b949e] uppercase">
+                                        <span>Properties</span>
+                                        <Settings size={12} />
+                                    </div>
+                                    <div className="space-y-3">
+                                        <div className="space-y-1">
+                                            <label className="text-xs text-[#8b949e]">Component Name</label>
+                                            <input type="text" disabled value="Auth Service" className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-[#c9d1d9]" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs text-[#8b949e]">Type</label>
+                                            <select disabled className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-[#c9d1d9]">
+                                                <option>Microservice</option>
+                                                <option>Monolith</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </CardItem>
                             </div>
-                        </motion.div>
-                    </div>
-
-                    {/* Property Panel Mock (Bottom Right) */}
-                    <div className="absolute bottom-4 right-4 w-64 bg-[#161b22] border border-[#30363d] rounded-lg p-4 shadow-2xl opacity-90 backdrop-blur-sm">
-                        <div className="flex justify-between items-center mb-4 text-xs text-[#8b949e] uppercase">
-                            <span>Properties</span>
-                            <Settings size={12} />
-                        </div>
-                        <div className="space-y-3">
-                            <div className="space-y-1">
-                                <label className="text-xs text-[#8b949e]">Component Name</label>
-                                <input type="text" disabled value="Auth Service" className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-[#c9d1d9]" />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-xs text-[#8b949e]">Type</label>
-                                <select disabled className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-[#c9d1d9]">
-                                    <option>Microservice</option>
-                                    <option>Monolith</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                        </CardItem>
+                    </CardBody>
+                </CardContainer>
             </div>
         </section>
     );

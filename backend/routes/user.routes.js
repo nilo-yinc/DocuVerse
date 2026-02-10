@@ -3,7 +3,10 @@ const {
   getProfile,
   login,
   logout,
-  registerUser
+  registerUser,
+  updateProfile,
+  requestPasswordOTP,
+  verifyPasswordOTP
 } = require("../controllers/user.controller");
 const isLoggedIn = require("../middlewares/isLoggedIn.middleware");
 
@@ -13,5 +16,8 @@ router.post("/register", registerUser);
 router.post("/login", login);
 router.get("/get-profile", isLoggedIn, getProfile);
 router.post("/logout", isLoggedIn, logout);
+router.put("/update-profile", isLoggedIn, updateProfile);
+router.post("/request-password-otp", isLoggedIn, requestPasswordOTP);
+router.post("/verify-password-otp", isLoggedIn, verifyPasswordOTP);
 
 module.exports = router;

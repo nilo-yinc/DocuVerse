@@ -1,0 +1,21 @@
+sequenceDiagram
+    participant U as Admin
+    participant FE as Frontend
+    participant API as Backend API
+    participant DB as Database
+    participant EXT as External Service
+
+    U->>FE: Initiates Action
+    FE->>API: POST /resource
+    API->>AUTH: Validate Token
+    AUTH-->>API: Token Valid
+    API->>DB: Query Data
+    DB-->>API: Return Record
+    alt Cache Miss
+        API->>EXT: Fetch Supplemental Data
+        EXT-->>API: Data Payload
+    end
+    API->>DB: Update State
+    DB-->>API: Success
+    API-->>FE: 200 OK (JSON)
+    FE-->>U: Updates UI Component

@@ -8,10 +8,34 @@
   }
 }
 
+@layer base {
+  html {
+    height: 100%;
+    overflow-x: hidden;
+    scrollbar-gutter: stable;
+  }
+
+  body {
+    min-height: 100%;
+    overflow-x: hidden;
+    overflow-y: scroll;
+  }
+}
+
 .neon-text {
   text-shadow: 0 0 10px rgba(0, 243, 255, 0.7);
 }
 
 .neon-border {
   box-shadow: 0 0 15px rgba(188, 19, 254, 0.5);
+}
+
+html, body {
+  scroll-behavior: auto !important;
+}
+
+* {
+  scroll-behavior: auto !important;
+  animation: none !important;
+  transition: none !important;
 }

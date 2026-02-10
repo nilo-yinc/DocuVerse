@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, BrainCircuit, FileText, MessageSquare, ChevronRight, Zap, X, Send, Bot, User, Workflow, MousePointer2, Plus, Share2, Download, Settings, Database, Server, Smartphone, Globe, Layout, Search, Clock, CheckCircle, AlertCircle, Mail, Image as ImageIcon, RefreshCw } from 'lucide-react';
+import { Sparkles, BrainCircuit, FileText, MessageSquare, ChevronRight, Zap, X, Send, Bot, User, Workflow, MousePointer2, Plus, Share2, Download, Settings, Database, Server, Smartphone, Globe, Layout, Search, Clock, CheckCircle, AlertCircle, Mail, Image as ImageIcon, RefreshCw, Code } from 'lucide-react';
 import axios from 'axios';
 import ReactFlow, { Background, Controls, MiniMap, applyNodeChanges, applyEdgeChanges } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useNavigate } from 'react-router-dom';
 
+// Debounce Utility
 // Debounce Utility
 const useDebounce = (value, delay) => {
     const [debouncedValue, setDebouncedValue] = useState(value);
@@ -18,12 +19,12 @@ const useDebounce = (value, delay) => {
     return debouncedValue;
 };
 
-const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUserEmail, initialStatus = "DRAFT", initialFeedback = [], workflowEvents = [], documentUrl }) => {
+const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUserEmail, initialStatus = "DRAFT", initialFeedback = [], workflowEvents = [], documentUrl, initialInsights = [] }) => {
     const navigate = useNavigate();
     // --- Notebook State ---
     const [content, setContent] = useState(initialContent || "# System Requirements\n\nStart typing...");
     const debouncedContent = useDebounce(content, 1500);
-    const [insights, setInsights] = useState([]);
+    const [insights, setInsights] = useState(initialInsights);
     const [loadingInsights, setLoadingInsights] = useState(false);
 
     // --- Studio State ---
@@ -458,6 +459,12 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
                                 Write notes, chat with context, and visualize architecture in one place.
                             </p>
                         </div>
+                        <button
+                            onClick={() => navigate('/studio/demo')}
+                            className="px-6 py-2 bg-[#a371f7] text-white rounded-lg font-bold hover:bg-[#8957e5] transition flex items-center gap-2 shadow-lg shadow-purple-900/20"
+                        >
+                            <Code size={18} /> Open Full Studio
+                        </button>
                     </div>
                 )}
 

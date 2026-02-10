@@ -1,613 +1,416 @@
-import { useEffect, useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+    Download, AlertCircle, FileText, CheckCircle, User, Sparkles, RefreshCw, LayoutDashboard, Code, ArrowRight
+} from 'lucide-react';
+import Logo from '../components/ui/Logo';
 import { useAuth } from '../context/AuthContext';
-import { User, FileText, CheckCircle2, XCircle, Download, Sparkles } from 'lucide-react';
-import ProfileSettings from './ProfileSettings';
-import axios from 'axios';
-import { saveAs } from 'file-saver';
 
-const EnterpriseGeneration = () => {
-    const loc = useLocation();
-    const navigate = useNavigate();
-    const { user } = useAuth();
-    const [progress, setProgress] = useState(0);
-    const [status, setStatus] = useState('Initializing Core...');
-    const [showProfile, setShowProfile] = useState(false);
-    const [complete, setComplete] = useState(false);
-    const [error, setError] = useState(null);
-    const [generatedBlob, setGeneratedBlob] = useState(null);
-    const [hqBlob, setHqBlob] = useState(null);
-    const [hqStatus, setHqStatus] = useState('');
-    const [hqLoading, setHqLoading] = useState(false);
-    const [secondsLeft, setSecondsLeft] = useState(60);
-    const [recovering, setRecovering] = useState(false);
-    const [downloadUrl, setDownloadUrl] = useState('');
-    const [hqDownloadUrl, setHqDownloadUrl] = useState('');
-    const [studioLoading, setStudioLoading] = useState(false);
-    const formData = loc.state?.formData;
-    const REQUEST_TIMEOUT_MS = 180000; // quality-first quick mode timeout
+// --- Utility: Project Key Generation ---
+const getProjectKey = (name) => {
+    if (!name) return "Project";
+    let safe = name.replace(/[^a-zA-Z0-9-_]/g, "_");
+    safe = safe.replace(/^_+|_+$/g, "");
+    return safe || "Project";
+};
 
-    const toList = (value) => {
-        if (!value) return [];
-        if (Array.isArray(value)) return value.map(v => String(v).trim()).filter(Boolean);
-        return String(value)
-            .split(/\r?\n|,|;/)
-            .map(v => v.trim())
-            .filter(Boolean);
+// --- Mappings ---
+const mapFormDataToSchema = (data) => {
+    const mapUserScale = (val) => {
+        if (val.includes('< 100')) return "<100";
+        if (val.includes('100 - 1,000')) return "100-1k";
+        if (val.includes('1,000 - 10,000')) return "1k-100k";
+        if (val.includes('10,000+')) return ">100k";
+        return "100-1k";
+    };
+    const mapPerformance = (val) => {
+        if (val.includes('Standard')) return "Normal";
+        if (val.includes('High Performance')) return "High";
+        if (val.includes('Real-time')) return "Real-time";
+        return "Normal";
+    };
+    const mapDetailLevel = (val) => {
+        if (val.includes('Standard')) return "Technical";
+        if (val.includes('Professional')) return "Enterprise-grade";
+        if (val.includes('Brief')) return "High-level";
+        return "Enterprise-grade";
     };
 
-    const mapScale = (scale) => {
-        const mapping = {
-            '< 100 Users': '<100',
-            '100 - 1,000 Users': '100-1k',
-            '1,000 - 10,000 Users': '1k-100k',
-            '10,000+ Users': '>100k',
-        };
-        return mapping[scale] || '100-1k';
-    };
-
-    const mapPerformance = (performance) => {
-        const mapping = {
-            'Standard (2-3s load)': 'Normal',
-            'High Performance (< 1s load)': 'High',
-            'Real-time (ms latency)': 'Real-time',
-        };
-        return mapping[performance] || 'Normal';
-    };
-
-    const mapDetailLevel = (detailLevel) => {
-        const mapping = {
-            'Standard (Academic)': 'High-level',
-            'Professional (Enterprise)': 'Enterprise-grade',
-            'Brief (Startup MVP)': 'High-level',
-        };
-        return mapping[detailLevel] || 'Enterprise-grade';
-    };
-
-    const buildSrsPayload = (fd) => ({
+    return {
         project_identity: {
-            project_name: (fd.projectName || 'Untitled Project').trim(),
-            author: toList(fd.authors).length > 0 ? toList(fd.authors) : ['N/A'],
-            organization: (fd.organization || 'Organization').trim(),
-            problem_statement: (fd.problemStatement || 'Project problem statement not provided.').trim(),
-            target_users: fd.targetUsers?.length ? fd.targetUsers : ['End User'],
+            project_name: data.projectName || "Untitled Project",
+            author: data.authors ? data.authors.split('\n').map(s => s.trim()).filter(Boolean) : ["Anonymous"],
+            organization: data.organization || "Unspecified",
+            problem_statement: data.problemStatement || "No problem statement provided.",
+            target_users: data.targetUsers.length > 0 ? data.targetUsers : ["End User"],
             live_link: null,
-            project_id: null,
+            project_id: null
         },
         system_context: {
-            application_type: fd.appType || 'Web Application',
-            domain: fd.domain || 'Enterprise Software',
+            application_type: data.appType || "Web Application",
+            domain: data.domain || "General"
         },
         functional_scope: {
-            core_features: toList(fd.coreFeatures).length > 0 ? toList(fd.coreFeatures) : ['Core feature definition pending'],
-            primary_user_flow: (fd.userFlow || '').trim() || null,
+            core_features: data.coreFeatures
+                ? data.coreFeatures.split('\n').map(s => s.trim().replace(/^[-•]\s*/, '')).filter(Boolean)
+                : ["Core functionality"],
+            primary_user_flow: data.userFlow || "Standard user flow."
         },
         non_functional_requirements: {
-            expected_user_scale: mapScale(fd.userScale),
-            performance_expectation: mapPerformance(fd.performance),
+            expected_user_scale: mapUserScale(data.userScale),
+            performance_expectation: mapPerformance(data.performance)
         },
         security_and_compliance: {
-            authentication_required: fd.authRequired === 'Yes',
-            sensitive_data_handling: fd.sensitiveData === 'Yes',
-            compliance_requirements: fd.compliance || [],
+            authentication_required: data.authRequired === 'Yes',
+            sensitive_data_handling: data.sensitiveData === 'Yes',
+            compliance_requirements: data.compliance
         },
         technical_preferences: {
-            preferred_backend: fd.backendPref || null,
-            database_preference: fd.dbPref || null,
-            deployment_preference: fd.deploymentPref || null,
+            preferred_backend: data.backendPref !== 'No Preference' ? data.backendPref : null,
+            database_preference: data.dbPref !== 'No Preference' ? data.dbPref : null,
+            deployment_preference: data.deploymentPref !== 'No Preference' ? data.deploymentPref : null
         },
         output_control: {
-            srs_detail_level: mapDetailLevel(fd.detailLevel),
-            additional_instructions: (fd.additionalInstructions || '').trim() || null,
-        },
-    });
+            srs_detail_level: mapDetailLevel(data.detailLevel),
+            additional_instructions: data.additionalInstructions || null
+        }
+    };
+};
 
-    const toProjectKey = (name) => {
-        const raw = String(name || 'Project');
-        const safe = raw.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/^_+|_+$/g, '');
-        return safe || 'Project';
+const EnterpriseGeneration = () => {
+    const location = useLocation();
+    const navigate = useNavigate();
+    const { user } = useAuth();
+
+    // Primary Generation State (Quick Pass)
+    const [status, setStatus] = useState('initializing');
+    const [progress, setProgress] = useState(0);
+    const [message, setMessage] = useState("Initializing Generator...");
+    const [result, setResult] = useState(null);
+    const [error, setError] = useState(null);
+    const [timer, setTimer] = useState(0);
+    const [studioProjectId, setStudioProjectId] = useState(null);
+
+    // HQ Generation State (Second Pass)
+    const [hqStatus, setHqStatus] = useState('idle'); // 'idle', 'processing', 'complete', 'error'
+    const [hqProgress, setHqProgress] = useState(0);
+    const [hqMessage, setHqMessage] = useState("");
+    const [hqResult, setHqResult] = useState(null);
+
+    const pollingRef = useRef(null);
+    const hqPollingRef = useRef(null);
+    const timerRef = useRef(null);
+    const hasStartedRef = useRef(false);
+
+    const formData = location.state?.formData;
+    const projectKey = formData ? getProjectKey(formData.projectName) : "Project";
+
+    const formatTime = (seconds) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
-    const tryRecoverTimedOutGeneration = async (projectKey, downloadNameBase) => {
-        const maxAttempts = 60; // ~5 min recovery window
-        for (let i = 0; i < maxAttempts; i++) {
-            try {
-                const statusRes = await axios.get(`/srs_status/${projectKey}`, { timeout: 5000 });
-                const bestUrl =
-                    statusRes?.data?.enhanced_download_url ||
-                    statusRes?.data?.full_download_url ||
-                    statusRes?.data?.quick_download_url ||
-                    statusRes?.data?.instant_download_url;
-                if (bestUrl) {
-                    const recoveredRes = await axios.get(bestUrl, {
-                        responseType: 'blob',
-                        timeout: 15000,
-                    });
-                    setGeneratedBlob(recoveredRes.data);
-                    saveAs(recoveredRes.data, `${downloadNameBase}_Enterprise_SRS.docx`);
-                    setComplete(true);
-                    setError(null);
-                    setStatus('Recovered and downloaded generated document.');
-                    setHqStatus('Document recovered after timeout. You can still generate HQ version.');
-                    setRecovering(false);
-                    return true;
-                }
-            } catch {
-                // Keep retrying within bounded attempts.
-            }
-            if (i % 4 === 0) {
-                setStatus('Server is still processing... auto-downloading when ready.');
-            }
-            await new Promise((resolve) => setTimeout(resolve, 3000));
-        }
-        setRecovering(false);
-        return false;
-    };
+    const startGeneration = async (mode = 'quick') => {
+        if (!formData) return;
 
-    const steps = [
-        "Initializing Core...",
-        "Analyzing Project Context...",
-        "Drafting Functional Requirements...",
-        "Validating Security Constraints...",
-        "Optimizing Technical Architecture...",
-        "Finalizing Documentation..."
-    ];
-
-    useEffect(() => {
-        if (!formData) {
-            navigate('/enterprise/form');
-            return;
-        }
-
-        const runGeneration = async () => {
-            let progressInterval = null;
-            let statusInterval = null;
-            let countdownInterval = null;
-            let progressPollInterval = null;
-            try {
-                // Simulate steps for UI feedback
-                let stepIndex = 0;
-                setSecondsLeft(60);
-                progressInterval = setInterval(() => {
-                    setProgress(prev => {
-                        const increment = prev < 60 ? 2 : prev < 90 ? 1 : 0;
-                        const next = prev + increment;
-                        if (next % 20 === 0 && stepIndex < steps.length - 1) {
-                            stepIndex++;
-                            setStatus(steps[stepIndex]);
-                        }
-                        return Math.min(next, 95);
-                    });
-                }, 400);
-
-                // Keep UI alive with rotating messaging during longer backend work.
-                statusInterval = setInterval(() => {
-                    setStatus(prev => {
-                        if (prev.startsWith('Finalizing')) {
-                            return 'Still generating diagrams and formatting document...';
-                        }
-                        return 'Finalizing Documentation...';
-                    });
-                }, 8000);
-                countdownInterval = setInterval(() => {
-                    setSecondsLeft(prev => Math.max(prev - 1, 0));
-                }, 1000);
-
-                const payload = buildSrsPayload(formData);
-                const projectKey = toProjectKey(formData.projectName);
-
-                // Real backend stage progress polling
-                progressPollInterval = setInterval(async () => {
-                    try {
-                        const res = await axios.get(`/srs_progress/${projectKey}`, { timeout: 4000 });
-                        const p = res?.data;
-                        if (!p) return;
-                        if (typeof p.progress === 'number') {
-                            setProgress(prev => Math.max(prev, Math.min(99, p.progress)));
-                        }
-                        if (p.message) {
-                            setStatus(p.message);
-                        }
-                    } catch {
-                        // keep silent; UI has fallback simulated progress
-                    }
-                }, 2000);
-
-                const requestAndDownload = async (mode) => {
-                    const { data } = await axios.post(`/generate_srs?mode=${mode}`, payload, {
-                        timeout: REQUEST_TIMEOUT_MS,
-                    });
-                    if (!data?.download_url) {
-                        throw new Error(`SRS generated in ${mode} mode but no download URL returned.`);
-                    }
-                    const fileResponse = await axios.get(data.download_url, { responseType: 'blob' });
-                    return { data, blob: fileResponse.data };
-                };
-
-                // Phase 1: Quick SRS (quality-first baseline format)
-                let data;
-                let blob;
-                try {
-                    const res = await requestAndDownload('quick');
-                    data = res.data;
-                    blob = res.blob;
-                } catch (quickErr) {
-                    const quickStatus = quickErr?.response?.status;
-                    if (quickStatus === 500) {
-                        setStatus('Quick mode failed, switching to instant fallback...');
-                        const fallbackRes = await requestAndDownload('instant');
-                        data = fallbackRes.data;
-                        blob = fallbackRes.blob;
-                    } else {
-                        throw quickErr;
-                    }
-                }
-                setGeneratedBlob(blob); // Save for manual download
-                if (data?.download_url) {
-                    setDownloadUrl(data.download_url);
-                }
-
-                clearInterval(progressInterval);
-                clearInterval(statusInterval);
-                clearInterval(countdownInterval);
-                clearInterval(progressPollInterval);
-                progressInterval = null;
-                statusInterval = null;
-                countdownInterval = null;
-                progressPollInterval = null;
-
-                setStatus('Finalizing Document...');
-                setProgress(100);
-                setRecovering(false);
-
-                setComplete(true);
-                setHqStatus('Need richer formatting and all diagrams? Click "Generate High Quality".');
-
-            } catch (err) {
-                if (progressInterval) {
-                    clearInterval(progressInterval);
-                }
-                if (statusInterval) {
-                    clearInterval(statusInterval);
-                }
-                if (countdownInterval) {
-                    clearInterval(countdownInterval);
-                }
-                if (progressPollInterval) {
-                    clearInterval(progressPollInterval);
-                }
-                console.error("Generation Failed:", err);
-                const timedOut = err?.code === 'ECONNABORTED';
-                if (timedOut) {
-                    try {
-                        setRecovering(true);
-                        setError(null);
-                        setStatus('Timed out in browser, but generation is still running on server...');
-                        const projectName = (formData.projectName || "Enterprise_SRS").replace(/[^a-zA-Z0-9-_]/g, '_');
-                        const recovered = await tryRecoverTimedOutGeneration(toProjectKey(formData.projectName), projectName);
-                        if (recovered) return;
-                    } catch (fallbackErr) {
-                        setRecovering(false);
-                        const msg = fallbackErr?.message || 'Timeout recovery failed.';
-                        setError(msg);
-                        setStatus(`Failed: ${msg}`);
-                        return;
-                    }
-                    setError('Server is still busy. Please retry once, or use Generate High Quality after base doc is ready.');
-                    setStatus('Could not auto-recover in time.');
-                    return;
-                }
-
-                const detail = err?.response?.data?.detail;
-                const errorMsg =
-                    (typeof detail === 'string' ? detail : (detail ? JSON.stringify(detail) : null)) ||
-                    err?.response?.data?.message ||
-                    err?.message ||
-                    "Unknown Error during document generation";
-                setRecovering(false);
-                setError(errorMsg);
-                setStatus(`Failed: ${errorMsg}`);
-            }
-        };
-
-        runGeneration();
-    }, [formData, navigate]);
-
-    const handleGenerateHighQuality = async () => {
-        if (!formData || hqLoading) return;
         try {
-            setHqLoading(true);
-            setHqStatus('Preparing enhanced SRS with more details and diagrams...');
-            const payload = buildSrsPayload(formData);
-            const projectKey = toProjectKey(formData.projectName);
-
-            const tryDownloadEnhanced = async () => {
-                const statusRes = await axios.get(`/srs_status/${projectKey}`, { timeout: 8000 });
-                const enhancedUrl = statusRes?.data?.enhanced_download_url || statusRes?.data?.full_download_url;
-                if (enhancedUrl) {
-                    const res = await axios.get(enhancedUrl, { responseType: 'blob', timeout: 300000 });
-                    setHqDownloadUrl(enhancedUrl);
-                    return res.data;
-                }
-                return null;
-            };
-
-            // Prefer enhanced background version first
-            let hqFile = await tryDownloadEnhanced();
-            if (!hqFile) {
-                setHqStatus('Enhanced version is still building. Retrying in the background...');
-                for (let i = 0; i < 20; i++) {
-                    await new Promise((r) => setTimeout(r, 5000));
-                    hqFile = await tryDownloadEnhanced();
-                    if (hqFile) break;
-                }
+            if (mode === 'quick') {
+                setStatus('processing');
+                setProgress(0);
+                timerRef.current = setInterval(() => setTimer(t => t + 1), 1000);
+                pollingRef.current = setInterval(checkProgress, 1000);
+            } else {
+                setHqStatus('processing');
+                setHqProgress(0);
+                setHqMessage("Starting High Quality analysis...");
+                hqPollingRef.current = setInterval(checkHqProgress, 1000);
             }
 
-            if (!hqFile) {
-                // Fallback: request full build if enhanced isn't ready yet.
-                setHqStatus('Enhanced build not ready. Generating full quality now...');
-                const { data } = await axios.post('/generate_srs?mode=full', payload, { timeout: 300000 });
-                if (!data?.download_url) {
-                    throw new Error('High quality document URL not returned.');
-                }
-                const res = await axios.get(data.download_url, { responseType: 'blob', timeout: 300000 });
-                setHqDownloadUrl(data.download_url);
-                hqFile = res.data;
+            const payload = mapFormDataToSchema(formData);
+
+            const response = await fetch(`/generate_srs?mode=${mode}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.detail || "Generation failed");
             }
 
-            const projectName = (formData.projectName || "Enterprise_SRS").replace(/[^a-zA-Z0-9-_]/g, '_');
-            setHqBlob(hqFile);
-            saveAs(hqFile, `${projectName}_Enterprise_SRS_HQ.docx`);
-            setHqStatus('High quality document generated and downloaded.');
+            const data = await response.json();
+
+            if (mode === 'quick') {
+                setResult(data);
+                setStatus('complete');
+                setProgress(100);
+                setMessage("Quick SRS Ready!");
+                clearInterval(pollingRef.current);
+
+                // Automatically create Studio Project
+                createStudioProject(formData.projectName, data.download_url);
+            } else {
+                setHqResult(data);
+                setHqStatus('complete');
+                setHqProgress(100);
+                setHqMessage("High Quality SRS Complete!");
+                clearInterval(hqPollingRef.current);
+            }
+
         } catch (err) {
-            const msg = err?.response?.data?.detail || err?.message || 'Failed to generate high quality document.';
-            setHqStatus(msg);
-        } finally {
-            setHqLoading(false);
+            console.error("Generation Error:", err);
+            if (mode === 'quick') {
+                setError(err.message);
+                setStatus('error');
+                setMessage("System Error: Quick Generation Failed");
+                clearInterval(pollingRef.current);
+            } else {
+                setHqStatus('error');
+                setHqMessage(err.message);
+                clearInterval(hqPollingRef.current);
+            }
         }
     };
 
+    // Auto-start on mount (only once)
+    useEffect(() => {
+        if (!formData) return;
+        if (!hasStartedRef.current) {
+            hasStartedRef.current = true;
+            startGeneration('quick');
+        }
 
+        return () => {
+            if (pollingRef.current) clearInterval(pollingRef.current);
+            if (hqPollingRef.current) clearInterval(hqPollingRef.current);
+            if (timerRef.current) clearInterval(timerRef.current);
+        };
+    }, []);
+
+    // --- Polling Loops ---
+    const checkProgress = async () => {
+        try {
+            const res = await fetch(`/srs_progress/${projectKey}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.progress > 0) setProgress(data.progress);
+                if (data.message) setMessage(data.message);
+
+                if (data.status === 'failed') {
+                    setError(data.message);
+                    setStatus('error');
+                    clearInterval(pollingRef.current);
+                }
+            }
+        } catch (e) { console.warn("Polling error:", e); }
+    };
+
+    const checkHqProgress = async () => {
+        try {
+            const res = await fetch(`/srs_progress/${projectKey}`);
+            if (res.ok) {
+                const data = await res.json();
+                // If the backend returns progress for the current job
+                if (data.progress > 0) setHqProgress(data.progress);
+                if (data.message) setHqMessage(data.message);
+
+                if (data.status === 'failed') {
+                    setHqStatus('error');
+                    setHqMessage(data.message);
+                    clearInterval(hqPollingRef.current);
+                }
+            }
+        } catch (e) { console.warn("HQ Polling error:", e); }
+    };
+
+    const createStudioProject = async (name, docUrl) => {
+        try {
+            const res = await fetch('/api/project/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: name,
+                    content: `# ${name}\n\nSRS document generated successfully.\nReady for further analysis and diagrams.`,
+                    documentUrl: docUrl
+                })
+            });
+            if (res.ok) {
+                const project = await res.json();
+                setStudioProjectId(project.id);
+            }
+        } catch (e) {
+            console.error("Failed to create studio project:", e);
+        }
+    };
+
+    const handleDownload = (url) => {
+        if (url) window.location.href = url;
+    };
+
+    // --- Circular Physics ---
+    const radius = 60;
+    const circumference = 2 * Math.PI * radius;
+    const strokeDashoffset = circumference - (progress / 100) * circumference;
 
     return (
-        <div className="min-h-screen bg-black flex flex-col font-mono">
-            {/* Top Navigation Bar with Profile */}
-            <nav className="h-16 bg-gray-900/90 backdrop-blur-md border-b border-gray-800 z-50 flex items-center justify-between px-6">
-                <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('/dashboard')}>
-                    <div className="p-2 bg-gray-800 rounded-lg group-hover:bg-neon-blue/20 transition duration-300">
-                        <FileText className="text-neon-blue group-hover:scale-110 transition-transform" size={20} />
-                    </div>
-                    <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-neon-blue to-neon-purple tracking-tight">DocuVerse</span>
-                </div>
+        <div className="min-h-screen bg-[#050505] text-white font-sans flex flex-col items-center justify-center relative overflow-hidden p-8">
 
-                <div className="flex items-center gap-6">
-                    <div className="text-right hidden sm:block">
-                        <div className="text-sm font-bold text-white tracking-wide">{user?.name || 'User'}</div>
-                        <div className="text-xs text-gray-400 font-medium uppercase tracking-wider">Enterprise SRS</div>
-                    </div>
-
-                    <div
-                        onClick={() => setShowProfile(true)}
-                        className="w-10 h-10 rounded-full bg-gray-800 border-2 border-gray-700 hover:border-neon-blue cursor-pointer flex items-center justify-center overflow-hidden transition-all duration-300 hover:shadow-[0_0_15px_rgba(0,243,255,0.3)]"
-                    >
-                        {user?.profilePic ? (
-                            <img src={user.profilePic} alt="Profile" className="w-full h-full object-cover" />
-                        ) : (
-                            <User className="text-gray-400" size={20} />
-                        )}
-                    </div>
-                </div>
-            </nav>
-
-            {/* Main Content Area */}
-            <div className="flex-1 flex items-center justify-center p-10">
-
-                {!complete && !error ? (
-                    <div className="w-full max-w-2xl text-center">
-                        <motion.div
-                            initial={{ scale: 0.8, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            className="mb-10 relative"
-                        >
-                            <div className="w-32 h-32 border-4 border-t-neon-blue border-r-neon-purple border-b-neon-green border-l-transparent rounded-full mx-auto animate-spin"></div>
-                            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white font-bold text-xl">
-                                {progress}%
-                            </div>
-                        </motion.div>
-
-                        <h2 className="text-2xl text-neon-blue mb-4 animate-pulse">{status}</h2>
-                        {recovering && (
-                            <p className="text-yellow-300 mb-3">Recovery mode: waiting for server file and auto-download...</p>
-                        )}
-                        <div className="text-gray-300 mb-2">Target: less than 1 minute</div>
-                        <div className="text-neon-green mb-6">Watch: 00:{String(secondsLeft).padStart(2, '0')}</div>
-
-                        <div className="w-full bg-gray-900 rounded-full h-4 border border-gray-700 overflow-hidden">
-                            <motion.div
-                                className="h-full bg-gradient-to-r from-neon-blue to-neon-purple"
-                                style={{ width: `${progress}%` }}
-                            ></motion.div>
-                        </div>
-                    </div>
-                ) : error ? (
-                    <motion.div
-                        initial={{ opacity: 0, y: 30 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="text-center bg-[#11151c] border border-[#2b3137] p-10 rounded-2xl shadow-[0_30px_80px_rgba(0,0,0,0.45)]"
-                    >
-                        <div className="mx-auto mb-6 w-16 h-16 rounded-2xl bg-[#1b1f23] border border-[#2b3137] flex items-center justify-center">
-                            <XCircle className="text-[#d97762]" size={30} />
-                        </div>
-                        <h1 className="text-4xl font-semibold text-[#f5f1e8] mb-4">Generation Failed</h1>
-                        <p className="text-[#b3bbc2] mb-8 max-w-lg mx-auto">
-                            {error}
-                        </p>
-
-                        <div className="flex gap-4 justify-center">
-                            <button
-                                onClick={() => navigate('/enterprise/form')}
-                                className="bg-[#3a7ca5] text-[#0e1116] font-semibold px-8 py-4 rounded-lg hover:bg-[#2e6b90] transition"
-                            >
-                                Back to Form
-                            </button>
-                            <button
-                                onClick={() => navigate('/dashboard')}
-                                className="border border-[#3b434b] text-[#b3bbc2] px-8 py-4 rounded-lg hover:bg-[#1b1f23] transition"
-                            >
-                                Return to Dashboard
-                            </button>
-                        </div>
-                    </motion.div>
-                ) : (
-                    <motion.div
-                        initial={{ opacity: 0, y: 30 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="text-center bg-[#11151c] border border-[#2b3137] p-10 rounded-2xl shadow-[0_30px_80px_rgba(0,0,0,0.45)]"
-                    >
-                        <div className="mx-auto mb-6 w-16 h-16 rounded-2xl bg-[#1b1f23] border border-[#2b3137] flex items-center justify-center">
-                            <CheckCircle2 className="text-[#55b38b]" size={30} />
-                        </div>
-                        <h1 className="text-4xl font-semibold text-[#f5f1e8] mb-4">Documentation Ready</h1>
-                        <p className="text-[#b3bbc2] mb-8 max-w-lg mx-auto">
-                            Your Enterprise SRS document has been generated and downloaded.
-                        </p>
-                        {hqStatus && (
-                            <p className="text-[#7fb3d4] mb-6 max-w-lg mx-auto">{hqStatus}</p>
-                        )}
-
-                        <div className="flex flex-wrap gap-4 justify-center">
-                            <button
-                                onClick={() => {
-                                    if (generatedBlob) {
-                                        const projectName = (formData.projectName || "Enterprise_SRS").replace(/[^a-zA-Z0-9-_]/g, '_');
-                                        saveAs(generatedBlob, `${projectName}_Enterprise_SRS.docx`);
-                                        return;
-                                    }
-                                    if (downloadUrl) {
-                                        const projectName = (formData.projectName || "Enterprise_SRS").replace(/[^a-zA-Z0-9-_]/g, '_');
-                                        axios.get(downloadUrl, { responseType: 'blob' })
-                                            .then(res => {
-                                                setGeneratedBlob(res.data);
-                                                saveAs(res.data, `${projectName}_Enterprise_SRS.docx`);
-                                            })
-                                            .catch(() => {
-                                                setError('Failed to download document. Please regenerate.');
-                                            });
-                                    }
-                                }}
-                                className="bg-[#55b38b] text-[#0e1116] font-semibold px-8 py-3 rounded-lg hover:bg-[#4aa37d] transition w-full max-w-sm flex items-center justify-center gap-2"
-                                id="manual-download-btn"
-                            >
-                                <Download size={16} /> Download Final
-                            </button>
-                            <button
-                                onClick={handleGenerateHighQuality}
-                                disabled={hqLoading}
-                                className={`font-bold px-8 py-3 rounded-lg transition w-full max-w-sm flex items-center justify-center gap-2 ${hqLoading
-                                    ? 'bg-[#2b3137] text-[#8e98a0] cursor-not-allowed'
-                                    : 'bg-[#3a7ca5] text-[#0e1116] hover:bg-[#2e6b90]'
-                                    }`}
-                            >
-                                <Sparkles size={16} /> {hqLoading ? 'Generating HQ...' : 'Generate High Quality'}
-                            </button>
-                            {hqBlob && (
-                                <button
-                                    onClick={() => {
-                                        const projectName = (formData.projectName || "Enterprise_SRS").replace(/[^a-zA-Z0-9-_]/g, '_');
-                                        if (hqBlob) {
-                                            saveAs(hqBlob, `${projectName}_Enterprise_SRS_HQ.docx`);
-                                            return;
-                                        }
-                                        if (hqDownloadUrl) {
-                                            axios.get(hqDownloadUrl, { responseType: 'blob' })
-                                                .then(res => {
-                                                    setHqBlob(res.data);
-                                                    saveAs(res.data, `${projectName}_Enterprise_SRS_HQ.docx`);
-                                                })
-                                                .catch(() => {
-                                                    setHqStatus('Failed to re-download HQ file. Please generate again.');
-                                                });
-                                        }
-                                    }}
-                                    className="bg-[#c58a62] text-[#0e1116] font-semibold px-8 py-3 rounded-lg hover:bg-[#b87852] transition w-full max-w-sm flex items-center justify-center gap-2"
-                                >
-                                    <Download size={16} /> Download HQ Again
-                                </button>
-                            )}
-                            <button
-                                onClick={() => navigate('/enterprise/form')}
-                                className="bg-[#1b1f23] text-[#f5f1e8] font-semibold px-8 py-4 rounded-lg border border-[#2b3137] hover:bg-[#232a31] transition"
-                            >
-                                Generate Another
-                            </button>
-                            <button
-                                onClick={async () => {
-                                    console.log("Open in Studio clicked");
-                                    if (!formData) {
-                                        console.error("No formData found");
-                                        setError("Session data missing. Cannot create project.");
-                                        return;
-                                    }
-
-                                    setStudioLoading(true);
-                                    try {
-                                        const projectName = formData.projectName || "Untitled Project";
-                                        const coreFeaturesList = toList(formData.coreFeatures);
-                                        const featureBlock = coreFeaturesList.length
-                                            ? `- ${coreFeaturesList.join('\n- ')}`
-                                            : "N/A";
-                                        const initialMarkdown = `# ${projectName} - SRS Notes\n\n**Problem Statement:**\n${formData.problemStatement || "N/A"}\n\n**Core Features:**\n${featureBlock}\n\n**User Flow:**\n${formData.userFlow || "N/A"}`;
-
-                                        // Use the best available URL
-                                        const finalDocUrl = hqDownloadUrl || downloadUrl || null;
-                                        console.log("Creating project with docUrl:", finalDocUrl);
-
-                                        const res = await axios.post('/api/project/create', {
-                                            name: projectName,
-                                            content: initialMarkdown,
-                                            documentUrl: finalDocUrl
-                                        });
-                                        console.log("Project created:", res.data);
-                                        if (res.data.id) {
-                                            navigate(`/studio/${res.data.id}`);
-                                        } else {
-                                            throw new Error("No project ID returned");
-                                        }
-                                    } catch (e) {
-                                        console.error("Failed to create studio project", e);
-                                        setError(`Failed to open Studio: ${e.response?.data?.detail || e.message}`);
-                                    } finally {
-                                        setStudioLoading(false);
-                                    }
-                                }}
-                                disabled={studioLoading}
-                                className={`bg-[#a371f7] text-white font-bold px-8 py-4 rounded-lg hover:bg-[#8957e5] transition border border-[#a371f7] shadow-[0_0_15px_rgba(163,113,247,0.3)] flex items-center justify-center gap-2 ${studioLoading ? 'opacity-70 cursor-wait' : ''}`}
-                            >
-                                {studioLoading ? (
-                                    <>
-                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                        Creating Workspace...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Sparkles size={16} /> Open in DocuVerse Studio
-                                    </>
-                                )}
-                            </button>
-                            <button
-                                onClick={() => navigate('/dashboard')}
-                                className="border border-[#3b434b] text-[#b3bbc2] px-8 py-4 rounded-lg hover:bg-[#1b1f23] transition"
-                            >
-                                Return to Dashboard
-                            </button>
-                        </div>
-                    </motion.div>
-                )}
+            {/* Background */}
+            <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+                <div className="absolute top-[-20%] left-[-10%] w-[800px] h-[800px] bg-violet-900/10 rounded-full blur-[120px] animate-pulse-slow" />
+                <div className="absolute bottom-[-20%] right-[-10%] w-[800px] h-[800px] bg-cyan-900/10 rounded-full blur-[120px]" />
+                <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 mix-blend-overlay"></div>
             </div>
 
-            {/* Profile Modal */}
-            {showProfile && <ProfileSettings onClose={() => setShowProfile(false)} />}
+            {/* Header */}
+            <div className="absolute top-0 left-0 w-full p-6 px-8 flex justify-between items-center z-50 border-b border-white/5 bg-black/40 backdrop-blur-sm">
+                <Logo size="md" subText="GENERATOR_CORE" />
+                <div className="flex items-center gap-4">
+                    <div className="text-right hidden md:block">
+                        <div className="text-white font-bold text-sm tracking-wide">{user?.name || "Niloy Mallik"}</div>
+                        <div className="text-slate-500 text-[10px] font-mono tracking-wider uppercase">ENTERPRISE SRS</div>
+                    </div>
+                    <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400">
+                        <User size={20} />
+                    </div>
+                </div>
+            </div>
+
+            <div className="relative z-10 w-full max-w-2xl mt-20">
+                <div className="bg-black/40 backdrop-blur-xl border border-white/5 rounded-3xl p-12 shadow-2xl flex flex-col items-center">
+
+                    {/* Main Circular Loader */}
+                    <div className="relative w-48 h-48 flex items-center justify-center mb-12">
+                        <svg className="w-full h-full transform -rotate-90">
+                            <circle cx="50%" cy="50%" r={radius} stroke="rgba(255,255,255,0.05)" strokeWidth="4" fill="transparent" />
+                            <motion.circle
+                                cx="50%" cy="50%" r={radius}
+                                stroke={progress === 100 ? "#06b6d4" : "url(#tricolor)"}
+                                strokeWidth="4" fill="transparent"
+                                strokeDasharray={circumference}
+                                strokeDashoffset={strokeDashoffset}
+                                strokeLinecap="round"
+                                animate={{ strokeDashoffset, stroke: progress === 100 ? "#06b6d4" : "url(#tricolor)" }}
+                                transition={{ duration: 0.5 }}
+                            />
+                            <defs>
+                                <linearGradient id="tricolor" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" stopColor="#a855f7" />
+                                    <stop offset="50%" stopColor="#6366f1" />
+                                    <stop offset="100%" stopColor="#06b6d4" />
+                                </linearGradient>
+                            </defs>
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center flex-col z-10">
+                            <span className={`text-3xl font-bold font-mono tracking-widest transition-colors duration-500 ${progress === 100 ? 'text-cyan-400' : 'text-white'}`}>
+                                {Math.round(progress)}%
+                            </span>
+                        </div>
+                    </div>
+
+                    <h2 className="text-xl md:text-2xl font-bold mb-6 text-center tracking-wide text-cyan-400"
+                        style={{ textShadow: "0 0 10px rgba(6,182,212,0.5)" }}>
+                        {status === 'complete' ? (hqStatus === 'processing' ? "Enhancing Document Quality..." : "Generation Completed Successfully.") :
+                            status === 'error' ? "Generation Failed." : message}
+                    </h2>
+
+                    <div className="flex flex-col items-center gap-2 text-sm font-mono tracking-wider mb-8">
+                        <div className="text-slate-400">Target: <span className="text-slate-200">less than 1 minute</span></div>
+                        <div className="font-bold animate-pulse tracking-widest text-base text-cyan-400">Watch: {formatTime(timer)}</div>
+                    </div>
+
+                    {/* Linear Progress Bar */}
+                    <div className="w-full max-w-xl h-1.5 bg-slate-800/30 rounded-full overflow-visible relative mt-4">
+                        <motion.div
+                            className="h-full rounded-full relative"
+                            animate={{ width: `${progress}%` }}
+                            style={{
+                                background: progress === 100 ? 'linear-gradient(90deg, #06b6d4 0%, #a855f7 100%)' : 'linear-gradient(90deg, #06b6d4 0%, #3b82f6 50%, #d946ef 100%)',
+                                boxShadow: progress === 100 ? '0 0 20px rgba(6,182,212,0.8)' : '0 0 15px rgba(217,70,239,0.5)'
+                            }}
+                            transition={{ duration: 0.3 }}
+                        >
+                            {progress < 100 && <div className="absolute top-1/2 right-0 transform translate-x-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full blur-[4px] shadow-[0_0_15px_rgba(255,255,255,0.8)] opacity-80" />}
+                        </motion.div>
+                    </div>
+
+                    {/* Actions Menu */}
+                    {status === 'complete' && (
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mt-10 flex flex-col gap-4 w-full max-w-md">
+
+                            {/* Static Download for Quick Version */}
+                            <button
+                                onClick={() => handleDownload(result?.download_url)}
+                                className="w-full py-4 bg-gradient-to-r from-cyan-600 to-violet-600 text-white font-bold rounded-xl flex items-center justify-center gap-3 transition-all shadow-lg hover:scale-[1.02] shadow-cyan-500/20 group"
+                            >
+                                <Download size={20} className="group-hover:animate-bounce" />
+                                Download Final
+                            </button>
+
+                            {/* HQ Toggle / Download */}
+                            {hqStatus === 'idle' && (
+                                <button
+                                    onClick={() => startGeneration('full')}
+                                    className="py-3 px-4 bg-violet-600/20 border border-violet-500/30 hover:bg-violet-600/30 text-violet-300 hover:text-white rounded-xl flex items-center justify-center gap-2 transition-all font-medium"
+                                >
+                                    <Sparkles size={16} /> Generate High Quality
+                                </button>
+                            )}
+
+                            {hqStatus === 'processing' && (
+                                <div className="py-3 px-4 bg-violet-600/10 border border-violet-500/20 text-violet-400 rounded-xl flex flex-col items-center gap-2 opacity-80 cursor-not-allowed">
+                                    <div className="flex items-center gap-2">
+                                        <RefreshCw size={16} className="animate-spin" /> Generating HQ... ({hqProgress}%)
+                                    </div>
+                                    <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                                        <motion.div className="h-full bg-violet-500" initial={{ width: 0 }} animate={{ width: `${hqProgress}%` }} />
+                                    </div>
+                                    <span className="text-[10px] uppercase tracking-tighter">{hqMessage}</span>
+                                </div>
+                            )}
+
+                            {hqStatus === 'complete' && (
+                                <button
+                                    onClick={() => handleDownload(hqResult?.download_url)}
+                                    className="py-3 px-4 bg-violet-600 border border-violet-400 text-white rounded-xl flex items-center justify-center gap-2 transition-all font-bold shadow-lg shadow-violet-500/40 animate-pulse"
+                                >
+                                    <Download size={16} /> Download High Quality
+                                </button>
+                            )}
+
+                            {/* Secondary Actions */}
+                            <div className="grid grid-cols-2 gap-3 mt-2">
+                                <button onClick={() => navigate('/enterprise')} className="py-3 border border-slate-700 hover:border-slate-500 text-slate-300 rounded-xl flex items-center justify-center gap-2 text-sm">
+                                    <RefreshCw size={14} /> Generate Another
+                                </button>
+                                <button
+                                    onClick={() => navigate(`/studio/${studioProjectId || 'demo'}`)}
+                                    className="py-3 border border-cyan-500/30 hover:bg-cyan-900/10 text-cyan-300 rounded-xl flex items-center justify-center gap-2 text-sm"
+                                >
+                                    <Code size={14} /> Open in Studio
+                                </button>
+                            </div>
+
+                            <button onClick={() => navigate('/dashboard')} className="w-full py-3 border border-slate-700 hover:border-slate-500 text-slate-400 hover:text-white rounded-xl flex items-center justify-center gap-2 text-sm transition-all">
+                                <LayoutDashboard size={14} /> Return Dashboard
+                            </button>
+                        </motion.div>
+                    )}
+
+                    {status === 'error' && (
+                        <div className="mt-8 flex gap-4">
+                            <button onClick={() => startGeneration('quick')} className="text-white bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 px-6 py-2 rounded-lg flex items-center gap-2">
+                                <RefreshCw size={16} /> Retry Generation
+                            </button>
+                            <button onClick={() => navigate('/dashboard')} className="text-slate-400 hover:text-white px-6 py-2 rounded-lg">Dashboard</button>
+                        </div>
+                    )}
+
+                </div>
+            </div>
         </div>
     );
 };

@@ -23,8 +23,12 @@ const SystemStatusFooter = () => {
                     <span>0</span>
                 </div>
 
-                <div className="hidden sm:flex items-center hover:bg-white/10 px-2 h-full cursor-pointer transition-colors">
-                    <span>v2.0.0 Stable</span>
+                <div className="hidden lg:flex items-center hover:bg-white/10 px-2 h-full cursor-pointer transition-colors border-r border-white/10">
+                    <span>v2.2.0 Stable</span>
+                </div>
+
+                <div className="hidden lg:flex items-center px-2 h-full text-white/50 italic">
+                    © 2026 DocuVerse. All rights reserved.
                 </div>
             </div>
 
@@ -32,8 +36,9 @@ const SystemStatusFooter = () => {
             <div className="flex-1" />
 
             {/* Center Section: Credits */}
-            <div className="hidden md:flex items-center gap-2 h-full shrink-0 mx-4">
-                <span className="opacity-80">Designed & Developed by</span>
+            <div className="hidden lg:flex items-center gap-2 h-full shrink-0 mx-4">
+                <span className="opacity-60 italic pr-2 border-r border-white/20">Creative Logic Engine</span>
+                <span className="opacity-80 ml-2">Designed & Developed by</span>
                 <a
                     href="https://www.linkedin.com/in/niloy-mallik/"
                     target="_blank"

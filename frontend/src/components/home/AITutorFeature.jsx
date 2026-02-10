@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Bot, User, Send, GraduationCap, Maximize2, Minimize2, Image as ImageIcon, Paperclip, RefreshCw } from 'lucide-react';
 import axios from 'axios';
-import { CardSpotlight } from '../ui/Card3D';
+import { CardContainer, CardBody, CardItem, CardSpotlight } from '../ui/Card3D';
 
 const AITutorFeature = () => {
     const [messages, setMessages] = useState([
@@ -214,16 +214,23 @@ const AITutorFeature = () => {
 
                     <div className="space-y-4 pt-4">
                         <div className="text-xs font-bold text-[#8b949e] uppercase tracking-wider">Try asking:</div>
-                        {demoQuestions.map((q, i) => (
-                            <CardSpotlight
-                                key={i}
-                                className="cursor-pointer p-3"
-                                radius={150}
-                                onClick={() => handleSend(q)}
-                            >
-                                <span className="text-[#c9d1d9] hover:text-[#3fb950] text-sm transition-colors relative z-20">"{q}"</span>
-                            </CardSpotlight>
-                        ))}
+                        <div className="grid grid-cols-1 gap-4">
+                            {demoQuestions.map((q, i) => (
+                                <CardContainer key={i} containerClassName="py-0" className="w-full">
+                                    <CardBody className="w-full">
+                                        <CardItem translateZ="30" className="w-full">
+                                            <CardSpotlight
+                                                className="cursor-pointer p-3"
+                                                radius={150}
+                                                onClick={() => handleSend(q)}
+                                            >
+                                                <span className="text-[#c9d1d9] hover:text-[#3fb950] text-sm transition-colors relative z-20">"{q}"</span>
+                                            </CardSpotlight>
+                                        </CardItem>
+                                    </CardBody>
+                                </CardContainer>
+                            ))}
+                        </div>
                     </div>
                 </div>
 
@@ -232,168 +239,174 @@ const AITutorFeature = () => {
                     {/* Decorative Elements */}
                     <div className="absolute -top-10 -right-10 w-64 h-64 bg-[#3fb950]/10 blur-[80px] rounded-full pointer-events-none"></div>
 
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        whileInView={{ opacity: 1, scale: 1 }}
-                        viewport={{ once: true }}
-                        className={`bg-[#0d1117] border border-[#30363d] rounded-2xl shadow-2xl relative z-10 overflow-hidden flex flex-col ${expanded ? 'h-[70vh]' : 'h-[500px]'
-                            }`}
-                    >
-                        {/* Header */}
-                        <div className="h-14 border-b border-[#30363d] bg-[#161b22] flex items-center justify-between px-6">
-                            <div className="flex items-center gap-3">
-                                <div className="w-2 h-2 rounded-full bg-[#3fb950] animate-pulse"></div>
-                                <span className="font-bold text-white text-sm">AutoSRS Tutor</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className="text-xs text-[#8b949e] border border-[#30363d] px-2 py-0.5 rounded">Tutor</span>
-                                <button
-                                    onClick={refreshDiagramStatus}
-                                    className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${diagramEnabled ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e]'} ${diagramStatusLoading ? 'opacity-70' : 'hover:border-[#3fb950] hover:text-[#3fb950]'}`}
-                                    title={diagramEnabled ? 'Diagram enabled. Click to refresh.' : `Diagram disabled: ${diagramReason || 'Unknown reason'}`}
-                                    disabled={diagramStatusLoading}
-                                >
-                                    <RefreshCw size={12} className={diagramStatusLoading ? 'animate-spin' : ''} />
-                                    {diagramEnabled ? 'Diagram On' : 'Diagram Off'}
-                                </button>
-                                <button
-                                    onClick={refreshPhotoStatus}
-                                    className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${photoEnabled ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e]'} ${photoStatusLoading ? 'opacity-70' : 'hover:border-[#3fb950] hover:text-[#3fb950]'}`}
-                                    title={photoEnabled ? 'Image enabled. Click to refresh.' : `Image disabled: ${photoReason || 'Unknown reason'}`}
-                                    disabled={photoStatusLoading}
-                                >
-                                    <RefreshCw size={12} className={photoStatusLoading ? 'animate-spin' : ''} />
-                                    {photoEnabled ? 'Image On' : 'Image Off'}
-                                </button>
-                                <button
-                                    onClick={() => setExpanded((prev) => !prev)}
-                                    className="text-[#8b949e] hover:text-white transition"
-                                    title={expanded ? 'Minimize' : 'Maximize'}
-                                >
-                                    {expanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Messages */}
-                        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#0d1117]">
-                            {messages.map((msg, index) => (
+                    <CardContainer containerClassName="py-0" className="w-full h-full inter-var">
+                        <CardBody className="w-full h-full relative">
+                            <CardItem translateZ="50" className="w-full h-full">
                                 <motion.div
-                                    key={index}
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    whileInView={{ opacity: 1, scale: 1 }}
+                                    viewport={{ once: true }}
+                                    className={`bg-[#0d1117] border border-[#30363d] rounded-2xl shadow-2xl relative z-10 overflow-hidden flex flex-col ${expanded ? 'h-[70vh]' : 'h-[500px]'
+                                        }`}
                                 >
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 
-                                         ${msg.role === 'ai' ? 'bg-[#3fb950]/10 text-[#3fb950]' : 'bg-[#1f6feb]/10 text-[#1f6feb]'}`}>
-                                        {msg.role === 'ai' ? <Bot size={16} /> : <User size={16} />}
+                                    {/* Header */}
+                                    <div className="h-14 border-b border-[#30363d] bg-[#161b22] flex items-center justify-between px-6">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-2 h-2 rounded-full bg-[#3fb950] animate-pulse"></div>
+                                            <span className="font-bold text-white text-sm">AutoSRS Tutor</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs text-[#8b949e] border border-[#30363d] px-2 py-0.5 rounded">Tutor</span>
+                                            <button
+                                                onClick={refreshDiagramStatus}
+                                                className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${diagramEnabled ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e]'} ${diagramStatusLoading ? 'opacity-70' : 'hover:border-[#3fb950] hover:text-[#3fb950]'}`}
+                                                title={diagramEnabled ? 'Diagram enabled. Click to refresh.' : `Diagram disabled: ${diagramReason || 'Unknown reason'}`}
+                                                disabled={diagramStatusLoading}
+                                            >
+                                                <RefreshCw size={12} className={diagramStatusLoading ? 'animate-spin' : ''} />
+                                                {diagramEnabled ? 'Diagram On' : 'Diagram Off'}
+                                            </button>
+                                            <button
+                                                onClick={refreshPhotoStatus}
+                                                className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${photoEnabled ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e]'} ${photoStatusLoading ? 'opacity-70' : 'hover:border-[#3fb950] hover:text-[#3fb950]'}`}
+                                                title={photoEnabled ? 'Image enabled. Click to refresh.' : `Image disabled: ${photoReason || 'Unknown reason'}`}
+                                                disabled={photoStatusLoading}
+                                            >
+                                                <RefreshCw size={12} className={photoStatusLoading ? 'animate-spin' : ''} />
+                                                {photoEnabled ? 'Image On' : 'Image Off'}
+                                            </button>
+                                            <button
+                                                onClick={() => setExpanded((prev) => !prev)}
+                                                className="text-[#8b949e] hover:text-white transition"
+                                                title={expanded ? 'Minimize' : 'Maximize'}
+                                            >
+                                                {expanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div className={`p-4 rounded-2xl max-w-[80%] text-sm leading-relaxed 
+
+                                    {/* Messages */}
+                                    <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#0d1117]">
+                                        {messages.map((msg, index) => (
+                                            <motion.div
+                                                key={index}
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
+                                            >
+                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 
+                                         ${msg.role === 'ai' ? 'bg-[#3fb950]/10 text-[#3fb950]' : 'bg-[#1f6feb]/10 text-[#1f6feb]'}`}>
+                                                    {msg.role === 'ai' ? <Bot size={16} /> : <User size={16} />}
+                                                </div>
+                                                <div className={`p-4 rounded-2xl max-w-[80%] text-sm leading-relaxed 
                                          ${msg.role === 'ai' ? 'bg-[#161b22] text-[#c9d1d9] rounded-tl-none' : 'bg-[#1f6feb] text-white rounded-tr-none'}`}>
-                                        {msg.type === 'image' || msg.type === 'attachment' ? (
-                                            <div className="space-y-2">
-                                                <img src={msg.imageUrl} alt={msg.text} className="rounded-lg border border-[#30363d]" />
-                                                <div className="text-xs text-[#8b949e]">{msg.text}</div>
+                                                    {msg.type === 'image' || msg.type === 'attachment' ? (
+                                                        <div className="space-y-2">
+                                                            <img src={msg.imageUrl} alt={msg.text} className="rounded-lg border border-[#30363d]" />
+                                                            <div className="text-xs text-[#8b949e]">{msg.text}</div>
+                                                        </div>
+                                                    ) : (
+                                                        msg.text
+                                                    )}
+                                                </div>
+                                            </motion.div>
+                                        ))}
+                                        {isTyping && (
+                                            <div className="flex gap-4">
+                                                <div className="w-8 h-8 rounded-full bg-[#3fb950]/10 text-[#3fb950] flex items-center justify-center shrink-0">
+                                                    <Bot size={16} />
+                                                </div>
+                                                <div className="bg-[#161b22] p-4 rounded-2xl rounded-tl-none flex gap-1">
+                                                    <div className="w-2 h-2 bg-[#8b949e] rounded-full animate-bounce"></div>
+                                                    <div className="w-2 h-2 bg-[#8b949e] rounded-full animate-bounce delay-100"></div>
+                                                    <div className="w-2 h-2 bg-[#8b949e] rounded-full animate-bounce delay-200"></div>
+                                                </div>
                                             </div>
-                                        ) : (
-                                            msg.text
+                                        )}
+                                        {error && (
+                                            <div className="text-xs text-[#ff7b72]">{error}</div>
                                         )}
                                     </div>
-                                </motion.div>
-                            ))}
-                            {isTyping && (
-                                <div className="flex gap-4">
-                                    <div className="w-8 h-8 rounded-full bg-[#3fb950]/10 text-[#3fb950] flex items-center justify-center shrink-0">
-                                        <Bot size={16} />
-                                    </div>
-                                    <div className="bg-[#161b22] p-4 rounded-2xl rounded-tl-none flex gap-1">
-                                        <div className="w-2 h-2 bg-[#8b949e] rounded-full animate-bounce"></div>
-                                        <div className="w-2 h-2 bg-[#8b949e] rounded-full animate-bounce delay-100"></div>
-                                        <div className="w-2 h-2 bg-[#8b949e] rounded-full animate-bounce delay-200"></div>
-                                    </div>
-                                </div>
-                            )}
-                            {error && (
-                                <div className="text-xs text-[#ff7b72]">{error}</div>
-                            )}
-                        </div>
 
-                        {/* Input Area */}
-                        <div className="p-4 bg-[#161b22] border-t border-[#30363d] space-y-3">
-                            <div className="flex flex-wrap gap-2">
-                                {imagePresets.map((preset) => (
-                                    <button
-                                        key={preset.id}
-                                    onClick={() => handleGenerateImage(buildImagePrompt(preset.id), "diagram")}
-                                    disabled={!diagramEnabled || imageLoading}
-                                    className="px-3 py-1.5 text-xs rounded-lg border border-[#30363d] bg-[#0d1117] text-[#8b949e] hover:text-[#3fb950] hover:border-[#3fb950] transition disabled:opacity-50"
-                                    title={diagramEnabled ? `Generate ${preset.label}` : `Diagram disabled: ${diagramReason}`}
-                                    >
-                                    {preset.label}
-                                </button>
-                                ))}
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className="text-xs text-[#8b949e]">Mode:</span>
-                                <button
-                                    onClick={() => setImageType("diagram")}
-                                    className={`px-3 py-1 text-xs rounded-lg border transition ${imageType === 'diagram' ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e] hover:text-[#c9d1d9]'}`}
-                                    disabled={!diagramEnabled}
-                                    title={diagramEnabled ? 'Use diagram generation' : `Diagram disabled: ${diagramReason}`}
-                                >
-                                    Diagram
-                                </button>
-                                <button
-                                    onClick={() => setImageType("photo")}
-                                    className={`px-3 py-1 text-xs rounded-lg border transition ${imageType === 'photo' ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e] hover:text-[#c9d1d9]'}`}
-                                    disabled={!photoEnabled}
-                                    title={photoEnabled ? 'Use image generation' : `Image disabled: ${photoReason}`}
-                                >
-                                    Image
-                                </button>
-                            </div>
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    placeholder={mode === "image"
-                                        ? (imageType === "diagram" ? "Describe the diagram to generate..." : "Describe the image to generate...")
-                                        : "Ask or type /diagram or /image prompt"}
-                                    value={inputText}
-                                    onChange={(e) => setInputText(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleSend(inputText)}
-                                    className="w-full bg-[#0d1117] border border-[#30363d] rounded-xl px-4 py-3 pr-32 text-sm text-white focus:border-[#3fb950] focus:ring-1 focus:ring-[#3fb950] outline-none transition-all"
-                                />
-                                <button
-                                    onClick={() => handleSend(inputText)}
-                                    className="absolute right-2 top-2 p-1.5 bg-[#3fb950] hover:bg-[#2ea043] rounded-lg text-white transition-colors"
-                                >
-                                    <Send size={16} />
-                                </button>
-                                <button
-                                    onClick={() => setMode((prev) => (prev === "image" ? "text" : "image"))}
-                                    className={`absolute right-11 top-2 p-1.5 border rounded-lg transition-colors ${mode === "image" ? 'bg-[#3fb950] text-white border-[#3fb950]' : 'bg-[#161b22] border-[#30363d] text-[#c9d1d9]'} ${mode === "image" && imageType === "diagram" && !diagramEnabled ? 'opacity-50 cursor-not-allowed' : ''} ${mode === "image" && imageType === "photo" && !photoEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    title={mode === "image" ? 'Toggle image mode' : 'Toggle image mode'}
-                                    disabled={mode === "image" && ((imageType === "diagram" && !diagramEnabled) || (imageType === "photo" && !photoEnabled))}
-                                >
-                                    <ImageIcon size={16} />
-                                </button>
-                                <button
-                                    onClick={handleAttachClick}
-                                    className="absolute right-20 top-2 p-1.5 bg-[#161b22] border border-[#30363d] hover:bg-[#21262d] rounded-lg text-[#c9d1d9] transition-colors"
-                                    title="Attach image"
-                                >
-                                    <Paperclip size={16} />
-                                </button>
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    accept="image/*"
-                                    className="hidden"
-                                    onChange={handleFileChange}
-                                />
-                            </div>
-                        </div>
-                    </motion.div>
+                                    {/* Input Area */}
+                                    <div className="p-4 bg-[#161b22] border-t border-[#30363d] space-y-3">
+                                        <div className="flex flex-wrap gap-2">
+                                            {imagePresets.map((preset) => (
+                                                <button
+                                                    key={preset.id}
+                                                    onClick={() => handleGenerateImage(buildImagePrompt(preset.id), "diagram")}
+                                                    disabled={!diagramEnabled || imageLoading}
+                                                    className="px-3 py-1.5 text-xs rounded-lg border border-[#30363d] bg-[#0d1117] text-[#8b949e] hover:text-[#3fb950] hover:border-[#3fb950] transition disabled:opacity-50"
+                                                    title={diagramEnabled ? `Generate ${preset.label}` : `Diagram disabled: ${diagramReason}`}
+                                                >
+                                                    {preset.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs text-[#8b949e]">Mode:</span>
+                                            <button
+                                                onClick={() => setImageType("diagram")}
+                                                className={`px-3 py-1 text-xs rounded-lg border transition ${imageType === 'diagram' ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e] hover:text-[#c9d1d9]'}`}
+                                                disabled={!diagramEnabled}
+                                                title={diagramEnabled ? 'Use diagram generation' : `Diagram disabled: ${diagramReason}`}
+                                            >
+                                                Diagram
+                                            </button>
+                                            <button
+                                                onClick={() => setImageType("photo")}
+                                                className={`px-3 py-1 text-xs rounded-lg border transition ${imageType === 'photo' ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e] hover:text-[#c9d1d9]'}`}
+                                                disabled={!photoEnabled}
+                                                title={photoEnabled ? 'Use image generation' : `Image disabled: ${photoReason}`}
+                                            >
+                                                Image
+                                            </button>
+                                        </div>
+                                        <div className="relative">
+                                            <input
+                                                type="text"
+                                                placeholder={mode === "image"
+                                                    ? (imageType === "diagram" ? "Describe the diagram to generate..." : "Describe the image to generate...")
+                                                    : "Ask or type /diagram or /image prompt"}
+                                                value={inputText}
+                                                onChange={(e) => setInputText(e.target.value)}
+                                                onKeyDown={(e) => e.key === 'Enter' && handleSend(inputText)}
+                                                className="w-full bg-[#0d1117] border border-[#30363d] rounded-xl px-4 py-3 pr-32 text-sm text-white focus:border-[#3fb950] focus:ring-1 focus:ring-[#3fb950] outline-none transition-all"
+                                            />
+                                            <button
+                                                onClick={() => handleSend(inputText)}
+                                                className="absolute right-2 top-2 p-1.5 bg-[#3fb950] hover:bg-[#2ea043] rounded-lg text-white transition-colors"
+                                            >
+                                                <Send size={16} />
+                                            </button>
+                                            <button
+                                                onClick={() => setMode((prev) => (prev === "image" ? "text" : "image"))}
+                                                className={`absolute right-11 top-2 p-1.5 border rounded-lg transition-colors ${mode === "image" ? 'bg-[#3fb950] text-white border-[#3fb950]' : 'bg-[#161b22] border-[#30363d] text-[#c9d1d9]'} ${mode === "image" && imageType === "diagram" && !diagramEnabled ? 'opacity-50 cursor-not-allowed' : ''} ${mode === "image" && imageType === "photo" && !photoEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                title={mode === "image" ? 'Toggle image mode' : 'Toggle image mode'}
+                                                disabled={mode === "image" && ((imageType === "diagram" && !diagramEnabled) || (imageType === "photo" && !photoEnabled))}
+                                            >
+                                                <ImageIcon size={16} />
+                                            </button>
+                                            <button
+                                                onClick={handleAttachClick}
+                                                className="absolute right-20 top-2 p-1.5 bg-[#161b22] border border-[#30363d] hover:bg-[#21262d] rounded-lg text-[#c9d1d9] transition-colors"
+                                                title="Attach image"
+                                            >
+                                                <Paperclip size={16} />
+                                            </button>
+                                            <input
+                                                ref={fileInputRef}
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={handleFileChange}
+                                            />
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            </CardItem>
+                        </CardBody>
+                    </CardContainer>
                 </div>
             </div>
         </section>

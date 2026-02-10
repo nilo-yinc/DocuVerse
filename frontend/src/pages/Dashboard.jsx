@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { motion } from 'framer-motion';
 import { Building2, GraduationCap, User, FileText, Sparkles } from 'lucide-react';
+import Logo from '../components/ui/Logo';
 import ProfileSettings from './ProfileSettings';
 
 const Dashboard = () => {
@@ -15,11 +16,8 @@ const Dashboard = () => {
 
             {/* Header */}
             <nav className="h-20 bg-[#0e1116]/90 backdrop-blur-md border-b border-[#242a2f] z-50 flex items-center justify-between px-6 md:px-12">
-                <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('/')}>
-                    <div className="p-2 bg-[#1b1f23] rounded-lg group-hover:bg-[#3a7ca5]/20 transition duration-300">
-                        <FileText className="text-[#3a7ca5] group-hover:scale-110 transition-transform" size={24} />
-                    </div>
-                    <span className="text-2xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-[#e3b684] to-[#3a7ca5] tracking-tight">DocuVerse</span>
+                <div className="flex items-center gap-3 cursor-pointer group hover:opacity-80 transition-opacity" onClick={() => navigate('/')}>
+                    <Logo size="md" />
                 </div>
 
                 <div className="flex items-center gap-6">

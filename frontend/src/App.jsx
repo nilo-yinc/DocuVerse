@@ -1,5 +1,4 @@
-import { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -15,6 +14,7 @@ import SystemDesignPlayground from './pages/SystemDesignPlayground';
 import Library from './pages/Library';
 import ModelSimulation from './pages/ModelSimulation';
 import StudioPage from './pages/StudioPage';
+import EnterpriseSRS from './pages/EnterpriseSRS';
 
 const PrivateRoute = ({ children, redirectTo = "/dashboard" }) => {
   const { token, loading } = useAuth();
@@ -22,24 +22,9 @@ const PrivateRoute = ({ children, redirectTo = "/dashboard" }) => {
   return token ? children : <Navigate to={redirectTo} />;
 };
 
-const ScrollToTop = () => {
-  const { pathname } = useLocation();
-
-  useEffect(() => {
-    window.scrollTo(0, 0);
-    const timer = setTimeout(() => {
-      window.scrollTo(0, 0);
-    }, 50);
-    return () => clearTimeout(timer);
-  }, [pathname]);
-
-  return null;
-};
-
 function App() {
   return (
     <Router>
-      <ScrollToTop />
       <AuthProvider>
         <div className="min-h-screen bg-dark-bg text-white">
           <Routes>
@@ -49,6 +34,7 @@ function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/login" element={<Login />} />
             <Route path="/demo/:id" element={<Demo />} />
+            <Route path="/studio" element={<Navigate to="/studio/demo" />} />
             <Route path="/studio/:id" element={<StudioPage />} />
             <Route path="/system-design" element={<SystemDesignPlayground />} />
 
@@ -64,12 +50,17 @@ function App() {
             {/* Protected Routes - Require Authentication */}
             <Route path="/enterprise/form" element={
               <PrivateRoute redirectTo="/enterprise/access">
-                <EnterpriseForm />
+                <EnterpriseSRS />
               </PrivateRoute>
             } />
             <Route path="/enterprise/generation" element={
               <PrivateRoute redirectTo="/enterprise/access">
                 <EnterpriseGeneration />
+              </PrivateRoute>
+            } />
+            <Route path="/enterprise/srs" element={
+              <PrivateRoute redirectTo="/enterprise/access">
+                <EnterpriseSRS />
               </PrivateRoute>
             } />
             <Route path="/wizard" element={

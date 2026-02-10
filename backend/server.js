@@ -14,14 +14,20 @@ app.use(cors({
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token']
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 app.use(cookieParser());
 
 // Routes
 app.use('/api/v1/users', require('./routes/user.routes'));
 app.use('/api/projects', require('./routes/projects'));
 app.use('/api/webhooks', require('./routes/webhooks'));
+
+// Fallback explicit routes for password OTP (in case of router mismatch)
+const { requestPasswordOTP, verifyPasswordOTP } = require('./controllers/user.controller');
+const isLoggedIn = require('./middlewares/isLoggedIn.middleware');
+app.post('/api/v1/users/request-password-otp', isLoggedIn, requestPasswordOTP);
+app.post('/api/v1/users/verify-password-otp', isLoggedIn, verifyPasswordOTP);
 
 app.get('/', (req, res) => {
     res.send('DocuVerse API Running');

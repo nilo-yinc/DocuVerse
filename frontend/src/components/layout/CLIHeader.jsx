@@ -6,6 +6,8 @@ import {
     Home, Library, FileText, Settings, User, Sparkles
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import Logo from '../../components/ui/Logo';
+import ProfileSettings from '../../pages/ProfileSettings';
 
 // ============================================
 // CLI HEADER COMPONENT
@@ -17,6 +19,7 @@ const CLIHeader = () => {
     const location = useLocation();
     const { user, token } = useAuth();
     const [cursorVisible, setCursorVisible] = useState(true);
+    const [showProfile, setShowProfile] = useState(false);
 
     // Blinking cursor effect
     useEffect(() => {
@@ -75,12 +78,11 @@ const CLIHeader = () => {
                     <div className="flex items-center h-full">
                         {/* Logo / Terminal Prompt */}
                         <motion.div
-                            className="flex items-center gap-1 px-4 h-full bg-[#1e1e1e] border-r border-white/5 cursor-pointer group"
+                            className="flex items-center gap-3 pl-3 pr-4 h-full bg-[#1e1e1e] border-r border-white/5 cursor-pointer group"
                             onClick={() => navigate('/')}
                             whileHover={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
                         >
-                            <span className="text-[#569cd6]">~/</span>
-                            <span className="text-[#4ec9b0]">DocuVerse</span>
+                            <Logo size="sm" showText={true} />
                             <span className="text-[#8b8b8b]">/</span>
                             <span className="text-[#dcdcaa]">{getCurrentPage()}</span>
                             <span className={`text-[#58a6ff] ml-1 ${cursorVisible ? 'opacity-100' : 'opacity-0'}`}>▋</span>
@@ -135,10 +137,16 @@ const CLIHeader = () => {
                         {/* User Profile / Terminal Prompt */}
                         <motion.div
                             className="flex items-center gap-2 px-3 py-1.5 text-xs text-[#8b8b8b] hover:text-white hover:bg-white/5 rounded cursor-pointer transition-colors"
-                            onClick={() => navigate('/dashboard')}
+                            onClick={() => setShowProfile(true)}
                             whileHover={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
                         >
-                            <User size={12} className="text-[#4ec9b0]" />
+                            <div className="w-5 h-5 rounded-full bg-[#1b1f23] border border-[#3c3c3c] flex items-center justify-center overflow-hidden shrink-0">
+                                {user?.profilePic ? (
+                                    <img src={user.profilePic} alt="P" className="w-full h-full object-cover" />
+                                ) : (
+                                    <User size={12} className="text-[#4ec9b0]" />
+                                )}
+                            </div>
                             <span>
                                 <span className="text-[#4ec9b0]">{user?.name || 'guest'}</span>
                                 <span className="text-[#8b8b8b]">@docuverse</span>
@@ -148,6 +156,9 @@ const CLIHeader = () => {
                     </div>
                 </div>
             </nav>
+
+            {/* Profile Modal */}
+            {showProfile && <ProfileSettings onClose={() => setShowProfile(false)} />}
         </header>
     );
 };

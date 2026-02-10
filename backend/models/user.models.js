@@ -24,7 +24,26 @@ const userSchema = new mongoose.Schema(
       enum: ["user", "admin"],
       default: "user",
     },
+    phoneCountryCode: {
+      type: String,
+      default: "+1",
+    },
+    phoneNumber: {
+      type: String,
+      trim: true,
+    },
+    socialLinks: {
+      linkedin: String,
+      github: String,
+      twitter: String,
+      website: String,
+    },
+    profilePic: {
+      type: String, // Base64 or URL
+    },
     verificationTokenExpiry: Date,
+    passwordResetOTP: String,
+    passwordResetExpires: Date,
     resetPasswordToken: String,
     resetPasswordTokenExpiry: Date,
   },

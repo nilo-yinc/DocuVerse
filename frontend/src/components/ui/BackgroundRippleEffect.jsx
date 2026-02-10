@@ -69,12 +69,13 @@ export const BackgroundRippleEffect = ({
     rows: initialRows = 8,
     cols: initialCols = 27,
     cellSize = 56,
+    interactive = false,
     className
 }) => {
     const [gridDimensions, setGridDimensions] = useState({ rows: initialRows, cols: initialCols });
     const [activeCell, setActiveCell] = useState(null);
 
-    useEffect(() => {
+    React.useLayoutEffect(() => {
         const calculateGrid = () => {
             const width = window.innerWidth;
             const height = window.innerHeight;
@@ -91,6 +92,7 @@ export const BackgroundRippleEffect = ({
 
     // Global Hover Tracking
     useEffect(() => {
+        if (!interactive) return;
         const handleMouseMove = (e) => {
             const x = e.clientX;
             const y = e.clientY;
@@ -101,7 +103,7 @@ export const BackgroundRippleEffect = ({
 
         window.addEventListener("mousemove", handleMouseMove);
         return () => window.removeEventListener("mousemove", handleMouseMove);
-    }, [cellSize]);
+    }, [cellSize, interactive]);
 
     return (
         <div className={cn("fixed inset-0 z-0 overflow-hidden pointer-events-none", className)}>
@@ -112,7 +114,7 @@ export const BackgroundRippleEffect = ({
                 borderColor="rgba(255,255,255,0.05)" // passed but not directly used in simplified Cell, can be used if we passed style
                 fillColor="transparent"
                 clickedCell={activeCell}
-                interactive={true}
+                interactive={interactive}
             />
         </div>
     );

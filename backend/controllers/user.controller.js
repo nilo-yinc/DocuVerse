@@ -1,5 +1,5 @@
 const User = require("../models/user.models");
-// const { sendVerificationEmail } = require("../utils/sendingMail.utils");
+const { sendPasswordOTP } = require("../utils/sendingMail.utils");
 const jwt = require("jsonwebtoken");
 
 // Register user controller
@@ -176,6 +176,10 @@ const getProfile = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        phoneCountryCode: user.phoneCountryCode,
+        phoneNumber: user.phoneNumber,
+        socialLinks: user.socialLinks,
+        profilePic: user.profilePic,
         isVerified: user.isVerified,
         role: user.role,
       },
@@ -186,6 +190,100 @@ const getProfile = async (req, res) => {
       status: false,
       message: "Error getting user profile",
     });
+  }
+};
+
+// update user profile controller
+const updateProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { name, phoneCountryCode, phoneNumber, socialLinks, profilePic } = req.body;
+
+    const user = await User.findByIdAndUpdate(userId, {
+      name,
+      phoneCountryCode,
+      phoneNumber,
+      socialLinks,
+      profilePic
+    }, { new: true }).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ status: false, message: "User not found" });
+    }
+
+    return res.status(200).json({
+      status: true,
+      success: true,
+      message: "Profile updated successfully",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phoneCountryCode: user.phoneCountryCode,
+        phoneNumber: user.phoneNumber,
+        socialLinks: user.socialLinks,
+        profilePic: user.profilePic,
+      }
+    });
+  } catch (err) {
+    console.error("Update profile error", err);
+    return res.status(500).json({ status: false, message: err.message });
+  }
+};
+
+// request password reset OTP
+const requestPasswordOTP = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ status: false, message: "User not found" });
+
+    // Generate 6 digit code
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    user.passwordResetOTP = otp;
+    user.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 mins
+    await user.save();
+
+    const sent = await sendPasswordOTP(user.email, otp);
+    if (sent !== true && sent?.ok === false) {
+      return res.status(500).json({ status: false, message: "Failed to send verification code", detail: sent.error });
+    }
+
+    return res.status(200).json({
+      status: true,
+      message: "Verification code sent to your email."
+    });
+  } catch (err) {
+    return res.status(500).json({ status: false, message: err.message });
+  }
+};
+
+// verify OTP and change password
+const verifyPasswordOTP = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { otp, newPassword } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ status: false, message: "User not found" });
+
+    if (user.passwordResetOTP !== otp || user.passwordResetExpires < Date.now()) {
+      return res.status(400).json({ status: false, message: "Invalid or expired code" });
+    }
+
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ status: false, message: "Password must be at least 6 characters long" });
+    }
+
+    // Update password
+    user.password = newPassword;
+    user.passwordResetOTP = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save();
+
+    return res.status(200).json({ status: true, message: "Password updated successfully" });
+  } catch (err) {
+    return res.status(500).json({ status: false, message: err.message });
   }
 };
 
@@ -220,4 +318,4 @@ const logout = async (req, res) => {
   }
 };
 
-module.exports = { registerUser, login, getProfile, logout };
+module.exports = { registerUser, login, getProfile, logout, updateProfile, requestPasswordOTP, verifyPasswordOTP };

@@ -12,33 +12,38 @@ import {
 import IntegratedNotebook from '../components/home/IntegratedNotebook';
 import LearningFeature from '../components/home/LearningFeature';
 import AITutorFeature from '../components/home/AITutorFeature';
-import { Card3D, Card3DBody, Card3DItem, CardSpotlight, NoiseBackground, GlowingButton } from '../components/ui/Card3D';
+import { CardContainer, CardBody, CardItem, CardSpotlight, NoiseBackground, GlowingButton, Card3D, Card3DBody, Card3DItem } from '../components/ui/Card3D';
 import { BackgroundRippleEffect } from '../components/ui/BackgroundRippleEffect';
 import CLIHeader from '../components/layout/CLIHeader';
 import SystemStatusFooter from '../components/layout/SystemStatusFooter';
 
+const LANDING_INSIGHTS = [
+    { title: "Scalability Alert", type: "Security", desc: "Consider rate limiting for the public API endpoints." },
+    { title: "Database Optimization", type: "Performance", desc: "User profile queries may need an index on email field." },
+    { title: "Architecture Pattern", type: "Pattern", desc: "Detected Microservices pattern. Recommend API Gateway." }
+];
+
 const LandingPage = () => {
     const navigate = useNavigate();
     const { token } = useAuth();
-    const [typedText, setTypedText] = useState('');
     const fullText = "Writes Itself.";
-    const [showSample, setShowSample] = useState(false);
-
-    // Typewriter effect
-    useEffect(() => {
-        let index = 0;
-        const interval = setInterval(() => {
-            setTypedText(fullText.substring(0, index));
-            index++;
-            if (index > fullText.length) clearInterval(interval);
-        }, 150);
-        return () => clearInterval(interval);
-    }, []);
 
     const handleViewSample = () => {
         // Open the sample report from backend static file
         window.open('/static/sample_report.docx', '_blank');
     };
+
+    const ScrollSection = ({ children, className = "" }) => (
+        <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-50px" }}
+            transition={{ duration: 0.7, ease: "easeOut" }}
+            className={className}
+        >
+            {children}
+        </motion.div>
+    );
 
     return (
         <div className="min-h-screen bg-[#0d1117] text-[#c9d1d9] font-mono selection:bg-[#58a6ff] selection:text-[#0d1117] overflow-x-hidden relative pb-8">
@@ -48,7 +53,8 @@ const LandingPage = () => {
 
             {/* Interactive Background Grid Effect */}
             <BackgroundRippleEffect
-                className="opacity-40"
+                className="opacity-30"
+                interactive={true}
             />
 
             {/* Hero */}
@@ -59,10 +65,10 @@ const LandingPage = () => {
                     </div>
                     <h1 className="text-5xl md:text-7xl font-bold text-white tracking-tight leading-tight">
                         Documentation <br />
-                        <span className="text-[#79c0ff]">{typedText}<span className="animate-pulse">_</span></span>
+                        <span className="text-[#79c0ff]">{fullText}</span>
                     </h1>
                     <p className="text-lg text-[#8b949e] max-w-lg leading-relaxed">
-                        Generate IEEE-standard SRS documents and live prototypes directly from your terminal... or right here.
+                        Architect your vision with precision. Generate engineering-grade IEEE documentation and actionable system insights with AI-driven intelligence.
                     </p>
                     <div className="flex gap-4 flex-wrap">
                         <NoiseBackground
@@ -83,75 +89,78 @@ const LandingPage = () => {
                 </div>
 
                 {/* Terminal Visual */}
-                <motion.div
-                    initial={{ opacity: 0, y: -20 }}
-                    animate={{
-                        opacity: 1,
-                        y: 0,
-                        rotate: [0, 1, 0, -1, 0]
-                    }}
-                    transition={{
-                        opacity: { duration: 0.5 },
-                        y: { duration: 0.5 },
-                        rotate: {
-                            duration: 4,
-                            repeat: Infinity,
-                            ease: "easeInOut"
-                        }
-                    }}
-                    style={{ transformOrigin: "top center" }}
-                    className="hidden lg:block relative"
-                >
-                    <div className="w-full h-[400px] bg-[#0d1117] rounded-xl border border-[#30363d] shadow-2xl overflow-hidden font-mono text-sm relative group transform-style-3d">
-                        {/* Terminal Header */}
-                        <div className="h-8 bg-[#161b22] border-b border-[#30363d] flex items-center px-4 gap-2">
-                            <div className="w-3 h-3 rounded-full bg-[#ff5f56]"></div>
-                            <div className="w-3 h-3 rounded-full bg-[#ffbd2e]"></div>
-                            <div className="w-3 h-3 rounded-full bg-[#27c93f]"></div>
-                            <div className="ml-4 text-xs text-[#8b949e]">niloy@dev:~/autosrs</div>
-                        </div>
-                        {/* Terminal Body */}
-                        <div className="p-6 text-[#c9d1d9] space-y-2">
-                            <div>
-                                <span className="text-[#79c0ff]">➜</span> <span className="text-[#7ee787]">~</span> <span className="text-[#c9d1d9]">autosrs analyze --input "Hospital System"</span>
-                            </div>
-                            <div className="text-[#8b949e] pl-4">
-                                Analyzing requirements... <span className="text-[#7ee787]">Done</span><br />
-                                Identifying modules... <span className="text-[#7ee787]">Done</span><br />
-                                Generaring UML diagrams... <span className="text-[#7ee787]">Done</span>
-                            </div>
-                            <div className="mt-4">
-                                <span className="text-[#79c0ff]">➜</span> <span className="text-[#7ee787]">~</span> <span className="text-[#c9d1d9]">autosrs generate --mode high-quality</span>
-                            </div>
-                            <div className="text-[#8b949e] pl-4">
-                                Rendering IEEE 830-1998... <span className="text-[#7ee787]">Success</span><br />
-                                Appending Appendix A (User Personas)... <span className="text-[#7ee787]">Success</span><br />
-                                Appending Appendix B (Use Cases)... <span className="text-[#7ee787]">Success</span><br />
-                                <span className="text-[#e2e8f0] font-bold"> Report generated: ./output/Hospital_SRS_Final.docx</span>
-                            </div>
-                            <div className="mt-4">
-                                <span className="text-[#79c0ff]">➜</span> <span className="text-[#7ee787]">~</span> <span className="animate-pulse">▊</span>
-                            </div>
-                        </div>
-                    </div>
-                    {/* 3D Glow */}
-                    <div className="absolute -inset-10 bg-gradient-to-tr from-[#238636] to-[#79c0ff] opacity-10 blur-[100px] -z-10"></div>
-                </motion.div>
+                <CardContainer className="hidden lg:block relative inter-var">
+                    <CardBody className="relative">
+                        <motion.div
+                            animate={{
+                                y: [0, -15, 0],
+                            }}
+                            transition={{
+                                duration: 5,
+                                repeat: Infinity,
+                                ease: "easeInOut"
+                            }}
+                        >
+                            <CardItem
+                                translateZ="100"
+                                className="w-full"
+                            >
+                                <div className="w-full h-[400px] bg-[#0d1117] rounded-xl border border-[#30363d] shadow-2xl overflow-hidden font-mono text-sm relative group transform-style-3d hover:border-[#58a6ff]/50 transition-colors">
+                                    {/* Terminal Header */}
+                                    <div className="h-8 bg-[#161b22] border-b border-[#30363d] flex items-center px-4 gap-2">
+                                        <div className="w-3 h-3 rounded-full bg-[#ff5f56]"></div>
+                                        <div className="w-3 h-3 rounded-full bg-[#ffbd2e]"></div>
+                                        <div className="w-3 h-3 rounded-full bg-[#27c93f]"></div>
+                                        <div className="ml-4 text-xs text-[#8b949e]">niloy@dev:~/autosrs</div>
+                                    </div>
+                                    {/* Terminal Body */}
+                                    <div className="p-6 text-[#c9d1d9] space-y-2">
+                                        <div>
+                                            <span className="text-[#79c0ff]">➜</span> <span className="text-[#7ee787]">~</span> <span className="text-[#c9d1d9]">autosrs analyze --input "Hospital System"</span>
+                                        </div>
+                                        <div className="text-[#8b949e] pl-4">
+                                            Analyzing requirements... <span className="text-[#7ee787]">Done</span><br />
+                                            Identifying modules... <span className="text-[#7ee787]">Done</span><br />
+                                            Generaring UML diagrams... <span className="text-[#7ee787]">Done</span>
+                                        </div>
+                                        <div className="mt-4">
+                                            <span className="text-[#79c0ff]">➜</span> <span className="text-[#7ee787]">~</span> <span className="text-[#c9d1d9]">autosrs generate --mode high-quality</span>
+                                        </div>
+                                        <div className="text-[#8b949e] pl-4">
+                                            Rendering IEEE 830-1998... <span className="text-[#7ee787]">Success</span><br />
+                                            Appending Appendix A (User Personas)... <span className="text-[#7ee787]">Success</span><br />
+                                            Appending Appendix B (Use Cases)... <span className="text-[#7ee787]">Success</span><br />
+                                            <span className="text-[#e2e8f0] font-bold"> Report generated: ./output/Hospital_SRS_Final.docx</span>
+                                        </div>
+                                        <div className="mt-4">
+                                            <span className="text-[#79c0ff]">➜</span> <span className="text-[#7ee787]">~</span> <span className="animate-pulse">▊</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </CardItem>
+                        </motion.div>
+                        {/* 3D Glow (Static) */}
+                        <div className="absolute -inset-10 bg-gradient-to-tr from-[#238636] to-[#79c0ff] opacity-20 blur-[100px] -z-10"></div>
+                    </CardBody>
+                </CardContainer>
             </section>
 
             {/* --- NEW: Interactive Workspace Features --- */}
 
-            {/* 1. Integrated Studio (Notebook + Diagrams) */}
-            <IntegratedNotebook />
+            <ScrollSection>
+                <IntegratedNotebook initialInsights={LANDING_INSIGHTS} />
+            </ScrollSection>
 
-            {/* 3. Learning Center */}
-            <LearningFeature />
+            <ScrollSection>
+                <LearningFeature />
+            </ScrollSection>
 
-            {/* 4. AI Tutor */}
-            <AITutorFeature />
+            <ScrollSection>
+                <AITutorFeature />
+            </ScrollSection>
 
             {/* --- Existing Library Section --- */}
-            <section className="py-24 bg-[#161b22]/50 relative z-10">
+            <ScrollSection className="py-24 bg-[#161b22]/50 relative z-10">
                 <div className="max-w-7xl mx-auto px-6">
                     <div className="flex justify-between items-end mb-16">
                         <div>
@@ -238,7 +247,7 @@ const LandingPage = () => {
                         </Card3D>
                     </div>
                 </div>
-            </section>
+            </ScrollSection>
 
             {/* System Status Footer */}
             <SystemStatusFooter />
