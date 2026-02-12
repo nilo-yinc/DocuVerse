@@ -137,7 +137,7 @@ import threading
 
 today = datetime.today().strftime("%m/%d/%Y")
 
-app = FastAPI()
+app = FastAPI(docs_url=None, openapi_url=None, redoc_url=None)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

@@ -21,9 +21,12 @@ const EnterpriseGeneration = () => {
     const { user, token } = useAuth();
     const resolvedToken = token || sessionStorage.getItem('token') || localStorage.getItem('token');
     const formData = location.state?.formData;
-    const isUpdateFlow = Boolean(location.state?.update || location.state?.projectId || formData?.projectId);
+    const params = new URLSearchParams(location.search);
+    const queryUpdate = params.get('update') === '1';
+    const queryProjectId = params.get('projectId');
+    const isUpdateFlow = Boolean(queryUpdate || location.state?.update || location.state?.projectId || formData?.projectId || queryProjectId);
     const existingProjectId = isUpdateFlow
-        ? (location.state?.projectId || formData?.projectId || localStorage.getItem('autoSRS_activeProjectId') || null)
+        ? (location.state?.projectId || formData?.projectId || queryProjectId || localStorage.getItem('autoSRS_activeProjectId') || null)
         : null;
     const forceHQ = location.state?.forceHQ || false;
 

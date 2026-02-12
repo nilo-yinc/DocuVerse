@@ -56,6 +56,10 @@ const ProjectSchema = new mongoose.Schema({
         type: Object, // Stores the full SRSRequest JSON
         required: false
     },
+    enterpriseFormData: {
+        type: Object, // Stores the raw form inputs for restoration
+        required: false
+    },
     documentUrl: {
         type: String,
         required: false

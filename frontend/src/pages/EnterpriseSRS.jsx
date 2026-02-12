@@ -3,10 +3,11 @@ import Logo from '../components/ui/Logo';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import axios from 'axios';
 import {
     Layout, Globe, Zap, Server, Shield, Cpu, FileText,
     CheckCircle, ChevronRight, ChevronLeft, Terminal, Activity,
-    Fingerprint, Layers, Lock, Database
+    Fingerprint, Layers, Lock, Database, X
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -16,10 +17,87 @@ function cn(...inputs) {
     return twMerge(clsx(inputs));
 }
 
+const mapSrsRequestToFormData = (srsRequest) => {
+    if (!srsRequest) return {};
+    const pi = srsRequest.project_identity || {};
+    const sc = srsRequest.system_context || {};
+    const fs = srsRequest.functional_scope || {};
+    const nfr = srsRequest.non_functional_requirements || {};
+    const sec = srsRequest.security_and_compliance || {};
+    const tech = srsRequest.technical_preferences || {};
+    const out = srsRequest.output_control || {};
+
+    const authorsStr = (pi.author || []).join('\n');
+    const featuresStr = (fs.core_features || []).join('\n');
+
+    const scaleMap = { '<100': '< 100 Users', '100-1k': '100 - 1,000 Users', '1k-100k': '1,000 - 10,000 Users', '>100k': '10,000+ Users' };
+    const perfMap = { 'Normal': 'Standard (2-3s load)', 'High': 'High Performance (< 1s load)', 'Real-time': 'Real-time (ms latency)' };
+    const detailMap = { 'Enterprise-grade': 'Professional (Enterprise)', 'Technical': 'Standard (Academic)', 'High-level': 'Brief (Startup MVP)' };
+
+    // Technical Mapping Fallbacks
+    const techMap = {
+        'Node': 'Node.js', 'Nodejs': 'Node.js',
+        'Python': 'Python (Django/FastAPI)', 'FastAPI': 'Python (Django/FastAPI)', 'Django': 'Python (Django/FastAPI)',
+        'Java': 'Java (Spring)', 'Spring': 'Java (Spring)',
+        'Go': 'Go', 'Golang': 'Go',
+        'null': 'No Preference', 'undefined': 'No Preference', '': 'No Preference'
+    };
+
+    const dbMap = {
+        'Postgres': 'PostgreSQL', 'Postgresql': 'PostgreSQL',
+        'Mongo': 'MongoDB', 'Mongodb': 'MongoDB',
+        'MySql': 'MySQL', 'Mysql': 'MySQL',
+        'null': 'No Preference', 'undefined': 'No Preference', '': 'No Preference'
+    };
+
+    const normalizeTech = (val, map) => {
+        if (!val || val === 'null' || val === 'undefined') return 'No Preference';
+        if (Object.values(map).includes(val)) return val;
+        return map[val] || val;
+    };
+
+    return {
+        projectName: pi.project_name || '',
+        authors: authorsStr,
+        organization: pi.organization || '',
+        problemStatement: pi.problem_statement || '',
+        targetUsers: pi.target_users || [],
+        appType: sc.application_type || '',
+        domain: sc.domain || '',
+        coreFeatures: featuresStr,
+        userFlow: fs.primary_user_flow || '',
+        userScale: scaleMap[nfr.expected_user_scale] || nfr.expected_user_scale || '100 - 1,000 Users',
+        performance: perfMap[nfr.performance_expectation] || nfr.performance_expectation || 'Standard (2-3s load)',
+        authRequired: sec.authentication_required === true ? 'Yes' : (sec.authentication_required === false ? 'No' : 'Yes'),
+        sensitiveData: sec.sensitive_data_handling === true ? 'Yes' : (sec.sensitive_data_handling === false ? 'No' : 'Yes'),
+        compliance: sec.compliance_requirements || [],
+        backendPref: normalizeTech(tech.preferred_backend, techMap),
+        dbPref: normalizeTech(tech.database_preference, dbMap),
+        deploymentPref: tech.deployment_preference || 'Vercel/Netlify',
+        detailLevel: detailMap[out.srs_detail_level] || out.srs_detail_level || 'Professional (Enterprise)',
+        additionalInstructions: out.additional_instructions || ''
+    };
+};
+
+const mapBaseProjectToFormData = (project) => {
+    if (!project) return {};
+
+    const techMap = { 'Node': 'Node.js', 'Python': 'Python (Django/FastAPI)', 'Java': 'Java (Spring)' };
+    const dbMap = { 'Mongo': 'MongoDB', 'Postgres': 'PostgreSQL' };
+
+    return {
+        projectName: project.title || '',
+        domain: project.domain || '',
+        backendPref: techMap[project.techStack?.backend] || project.techStack?.backend || '',
+        dbPref: dbMap[project.techStack?.database] || project.techStack?.database || '',
+        authors: (project.teamMembers || []).map(m => m.name).join('\n')
+    };
+};
+
 const EnterpriseSRS = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { user } = useAuth();
+    const { user, token } = useAuth();
     const [step, setStep] = useState(1);
     const [isLoaded, setIsLoaded] = useState(false);
 
@@ -54,50 +132,100 @@ const EnterpriseSRS = () => {
         compliance: [],
 
         // 6. Technical
-        backendPref: '',
+        backendPref: 'No Preference',
         backendPref_other: '',
-        dbPref: '',
+        dbPref: 'No Preference',
         dbPref_other: '',
-        deploymentPref: '',
+        deploymentPref: 'Vercel/Netlify',
         deploymentPref_other: '',
 
         // 7. Output
-        detailLevel: 'Professional',
+        detailLevel: 'Professional (Enterprise)',
         additionalInstructions: ''
     });
 
+    const [projectId, setProjectId] = useState(null);
+
     // --- Effects ---
     useEffect(() => {
-        const savedData = localStorage.getItem('autoSRS_enterpriseForm');
-        if (savedData) {
-            try {
-                const parsed = JSON.parse(savedData);
-                setFormData(prev => ({ ...prev, ...parsed.formData }));
-                if (parsed.step) setStep(parsed.step);
-            } catch (e) {
-                console.error("Failed to load saved form", e);
+        const initializeForm = async () => {
+            const queryParams = new URLSearchParams(location.search);
+            const pId = queryParams.get('projectId') || location.state?.projectId;
+
+            let baseData = {
+                projectName: '', authors: '', organization: '', problemStatement: '',
+                targetUsers: [], otherUser: '', appType: '', domain: '', domain_other: '',
+                coreFeatures: '', userFlow: '', userScale: '', userScale_other: '',
+                performance: 'Standard (2-3s load)', performance_other: '', authRequired: 'Yes',
+                sensitiveData: 'Yes', compliance: [], backendPref: 'No Preference', backendPref_other: '',
+                dbPref: 'No Preference', dbPref_other: '', deploymentPref: 'Vercel/Netlify', deploymentPref_other: '',
+                detailLevel: 'Professional (Enterprise)', additionalInstructions: ''
+            };
+
+            // 1. Try fetching from backend if projectId exists
+            if (pId) {
+                setProjectId(pId);
+                try {
+                    const nodeApiBase = import.meta.env.VITE_NODE_API_URL
+                        || (typeof window !== 'undefined' ? `http://${window.location.hostname || 'localhost'}:5000` : 'http://localhost:5000');
+                    const authToken = token || localStorage.getItem('token');
+                    const res = await axios.get(`${nodeApiBase}/api/projects/${pId}`, {
+                        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {}
+                    });
+
+                    const projectData = res.data;
+                    if (projectData) {
+                        // Fallback chain: enterpriseFormData -> enterpriseData (mapping) -> base project data
+                        const restoredFromForm = projectData.enterpriseFormData || {};
+                        const restoredFromSrs = mapSrsRequestToFormData(projectData.enterpriseData);
+                        const restoredFromBase = mapBaseProjectToFormData(projectData);
+
+                        baseData = {
+                            ...baseData,
+                            ...restoredFromBase,
+                            ...restoredFromSrs,
+                            ...restoredFromForm
+                        };
+                    }
+                } catch (err) {
+                    console.error("Failed to fetch project for restoration", err);
+                }
+            } else {
+                // 2. Try Local Storage if not an update flow
+                const savedData = localStorage.getItem('autoSRS_enterpriseForm');
+                if (savedData) {
+                    try {
+                        const parsed = JSON.parse(savedData);
+                        baseData = { ...baseData, ...parsed.formData };
+                        if (parsed.step && !location.state?.step) setStep(parsed.step);
+                    } catch (e) {
+                        console.error("Failed to load saved form", e);
+                    }
+                }
             }
-        }
-        setIsLoaded(true);
-    }, []);
+
+            // 3. Apply Prefills (Feedback, etc.) from location state
+            if (location.state?.prefill) {
+                baseData = { ...baseData, ...location.state.prefill };
+            }
+            if (location.state?.step) {
+                setStep(location.state.step);
+            }
+
+            console.log("FINAL INITIALIZED FORM DATA:", baseData);
+            setFormData(baseData);
+            setIsLoaded(true);
+        };
+
+        initializeForm();
+    }, [location.search, location.state]);
 
     useEffect(() => {
-        const prefill = location.state?.prefill;
-        const prefillStep = location.state?.step;
-        if (prefill) {
-            setFormData(prev => ({ ...prev, ...prefill }));
-        }
-        if (prefillStep) {
-            setStep(prefillStep);
-        }
-    }, [location.state]);
-
-    useEffect(() => {
-        if (isLoaded) {
+        if (isLoaded && !projectId) {
             const payload = { formData, step };
             localStorage.setItem('autoSRS_enterpriseForm', JSON.stringify(payload));
         }
-    }, [formData, step, isLoaded]);
+    }, [formData, step, isLoaded, projectId]);
 
     // --- Handlers ---
     const updateField = (field, value) => {
@@ -116,7 +244,41 @@ const EnterpriseSRS = () => {
     };
 
     const handleGenerate = () => {
-        navigate('/enterprise/generation', { state: { formData } });
+        const normalizedUsers = (formData.targetUsers || []).map((u) => {
+            if (u === 'Other') {
+                return formData.otherUser ? `Other (${formData.otherUser})` : 'Other';
+            }
+            return u;
+        });
+
+        const normalizedCompliance = (formData.compliance || []).map((c) => {
+            if (c === 'Other') {
+                return formData.compliance_other ? `Other (${formData.compliance_other})` : 'Other';
+            }
+            return c;
+        });
+
+        const payload = {
+            ...formData,
+            projectId: projectId || '',
+            targetUsers: normalizedUsers,
+            compliance: normalizedCompliance,
+            appType: formData.appType === 'Other' ? formData.appType_other : formData.appType,
+            domain: formData.domain === 'Other' ? formData.domain_other : formData.domain,
+            userScale: formData.userScale === 'Other' ? formData.userScale_other : formData.userScale,
+            performance: formData.performance === 'Other' ? formData.performance_other : formData.performance,
+            backendPref: formData.backendPref === 'Other' ? formData.backendPref_other : formData.backendPref,
+            dbPref: formData.dbPref === 'Other' ? formData.dbPref_other : formData.dbPref,
+            deploymentPref: formData.deploymentPref === 'Other' ? formData.deploymentPref_other : formData.deploymentPref
+        };
+        navigate('/enterprise/generation', { state: { formData: payload, projectId: projectId || '' } });
+    };
+
+    const handleClearForm = () => {
+        if (window.confirm("Are you sure you want to clear the form? This will reset all fields.")) {
+            localStorage.removeItem('autoSRS_enterpriseForm');
+            window.location.href = '/enterprise/form'; // Redirect to fresh form
+        }
     };
 
     // --- UI Components ---
@@ -251,6 +413,16 @@ const EnterpriseSRS = () => {
                             </div>
                         </div>
                     ))}
+
+                    <div className="mt-6 px-3">
+                        <button
+                            onClick={handleClearForm}
+                            className="w-full group flex items-center gap-3 px-3 py-2.5 rounded-lg border border-red-500/20 text-red-500/60 hover:text-red-400 hover:bg-red-500/5 transition-all text-[10px] font-bold uppercase tracking-widest"
+                        >
+                            <X size={14} className="group-hover:rotate-90 transition-transform" />
+                            Clear Session Data
+                        </button>
+                    </div>
                 </nav>
 
                 <div className="mt-8 pt-6 border-t border-white/5">
@@ -313,7 +485,7 @@ const EnterpriseSRS = () => {
                                     <div className="mt-8">
                                         <label className="block text-slate-400 text-xs font-bold mb-4 uppercase tracking-widest">Target Users</label>
                                         <div className="flex flex-wrap gap-3">
-                                            {['Admin', 'End User', 'Manager', 'Analyst', 'Customer'].map(u => (
+                                            {['Admin', 'End User', 'Manager', 'Analyst', 'Customer', 'Other'].map(u => (
                                                 <label key={u} className="relative group cursor-pointer">
                                                     <input
                                                         type="checkbox"
@@ -327,6 +499,24 @@ const EnterpriseSRS = () => {
                                                 </label>
                                             ))}
                                         </div>
+                                        <AnimatePresence>
+                                            {formData.targetUsers.includes('Other') && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, height: 0, y: -10 }}
+                                                    animate={{ opacity: 1, height: 'auto', y: 0 }}
+                                                    exit={{ opacity: 0, height: 0, y: -10 }}
+                                                    className="mt-4"
+                                                >
+                                                    <input
+                                                        type="text"
+                                                        value={formData.otherUser || ''}
+                                                        onChange={e => updateField('otherUser', e.target.value)}
+                                                        className="w-full bg-black/40 border border-cyan-500/30 rounded-lg p-4 text-slate-200 focus:border-cyan-500 outline-none placeholder:text-slate-600 text-sm"
+                                                        placeholder="Specify other target users (e.g., Supplier, Vendor, Auditor)..."
+                                                    />
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
                                     </div>
                                 </div>
                             )}
@@ -335,7 +525,7 @@ const EnterpriseSRS = () => {
                             {step === 2 && (
                                 <div className="space-y-4">
                                     {renderSelect('Application Type', 'appType', ['Web Application', 'Mobile App', 'Desktop Software', 'API Service', 'Embedded System'])}
-                                    {renderSelect('Domain/Industry', 'domain', ['FinTech', 'Healthcare', 'E-commerce', 'Education', 'Social Media', 'Enterprise Resource Planning'])}
+                                    {renderSelect('Project Domain', 'domain', ['Healthcare', 'FinTech', 'E-commerce', 'Logistics', 'Education', 'Social Media', 'Enterprise ERP', 'Web Development', 'Mobile App', 'Other'])}
                                 </div>
                             )}
 
@@ -381,7 +571,7 @@ const EnterpriseSRS = () => {
                                     <div>
                                         <label className="block text-slate-400 text-xs font-bold mb-4 uppercase tracking-widest">Compliance Standards</label>
                                         <div className="grid grid-cols-2 gap-3">
-                                            {['GDPR', 'HIPAA', 'PCI-DSS', 'SOC2'].map(c => (
+                                            {['GDPR', 'HIPAA', 'PCI-DSS', 'SOC2', 'Other'].map(c => (
                                                 <label key={c} className="relative group cursor-pointer">
                                                     <input
                                                         type="checkbox"
@@ -396,6 +586,24 @@ const EnterpriseSRS = () => {
                                                 </label>
                                             ))}
                                         </div>
+                                        <AnimatePresence>
+                                            {formData.compliance.includes('Other') && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, height: 0, y: -10 }}
+                                                    animate={{ opacity: 1, height: 'auto', y: 0 }}
+                                                    exit={{ opacity: 0, height: 0, y: -10 }}
+                                                    className="mt-4"
+                                                >
+                                                    <input
+                                                        type="text"
+                                                        value={formData.compliance_other || ''}
+                                                        onChange={e => updateField('compliance_other', e.target.value)}
+                                                        className="w-full bg-black/40 border border-violet-500/30 rounded-lg p-4 text-slate-200 focus:border-violet-500 outline-none placeholder:text-slate-600 text-sm"
+                                                        placeholder="Specify other compliance standards (e.g., ISO 27001, SOX)..."
+                                                    />
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
                                     </div>
                                 </div>
                             )}
@@ -442,6 +650,13 @@ const EnterpriseSRS = () => {
                                 className="text-slate-500 hover:text-white disabled:opacity-0 transition-colors flex items-center gap-2 text-sm font-mono"
                             >
                                 <ChevronLeft size={16} /> BACK
+                            </button>
+
+                            <button
+                                onClick={handleClearForm}
+                                className="text-red-500/70 hover:text-red-500 transition-colors text-xs font-mono uppercase tracking-widest border border-red-500/20 px-4 py-1.5 rounded-full hover:bg-red-500/10"
+                            >
+                                Clear Form
                             </button>
 
                             {step < 7 && (

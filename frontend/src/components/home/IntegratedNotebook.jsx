@@ -8,7 +8,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 // Debounce Utility
-// Debounce Utility
 const useDebounce = (value, delay) => {
     const [debouncedValue, setDebouncedValue] = useState(value);
     useEffect(() => {
@@ -20,7 +19,7 @@ const useDebounce = (value, delay) => {
     return debouncedValue;
 };
 
-const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUserEmail, initialStatus = "DRAFT", initialFeedback = [], workflowEvents = [], documentUrl, initialInsights = [], initialClientEmail = "", previewMode = false }) => {
+const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUserEmail, initialStatus = "DRAFT", initialFeedback = [], workflowEvents = [], documentUrl, initialInsights = [], initialClientEmail = "", previewMode = false, enterpriseFormData = {} }) => {
     const navigate = useNavigate();
     const { token } = useAuth();
     // --- Notebook State ---
@@ -358,22 +357,17 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
         try {
             const res = await axios.post(`${pythonApiBase}/api/notebook/diagram`, { content: content });
             if (res.data.nodes) {
-                // ReactFlow expects node data in a specific format
-                // The backend returns { id, type, label, x, y }
-                // We need to map it to { id, type, position: {x, y}, data: { label } }
                 const mappedNodes = res.data.nodes.map(n => ({
                     id: n.id,
-                    type: 'default', // Using default type for safety, or custom if defined
+                    type: 'default',
                     position: { x: n.x, y: n.y },
                     data: { label: n.label }
                 }));
-                // Edges: { id, source, target, label? }
                 const mappedEdges = (res.data.edges || []).map(e => ({
                     ...e,
                     type: 'smoothstep',
                     animated: true
                 }));
-
                 setNodes(mappedNodes);
                 setEdges(mappedEdges);
             }
@@ -439,33 +433,23 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
             const data = res.data;
             if (!data) return;
 
-            // Update local state ONLY if values are present and non-empty
             if (data.status && data.status !== status) setStatus(data.status);
-
             if (data.reviewFeedback && Array.isArray(data.reviewFeedback) && data.reviewFeedback.length > 0) {
                 setFeedback(data.reviewFeedback);
             }
-
-            // Only overwrite timeline if Python has more events (rare, but possible if review loop is used)
             if (data.workflowEvents && Array.isArray(data.workflowEvents) && data.workflowEvents.length > (workflowTimeline?.length || 0)) {
                 setWorkflowTimeline(data.workflowEvents);
             }
-
             if (data.clientEmail && !clientEmail) setClientEmail(data.clientEmail);
 
-            // SYNC BACK TO NODE.JS: Selective sync to avoid overwriting rich Node.js data with thin Python data
             if (token) {
                 const patchPayload = {};
                 if (data.status) patchPayload.status = data.status;
                 if (data.clientEmail) patchPayload.clientEmail = data.clientEmail;
-
-                // Do NOT sync workflowEvents/reviewFeedback back to Node.js if they are empty from Python
                 if (data.reviewFeedback?.length > 0) patchPayload.reviewFeedback = data.reviewFeedback;
-                // Node.js is the source of truth for timeline; we only sync if Python has NEW events
                 if (data.workflowEvents?.length > (workflowEvents?.length || 0)) {
                     patchPayload.workflowEvents = data.workflowEvents;
                 }
-
                 if (Object.keys(patchPayload).length > 0) {
                     await axios.put(`${nodeApiBase}/api/projects/${projectId}`, patchPayload, {
                         headers: { Authorization: `Bearer ${token}` }
@@ -473,9 +457,7 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
                 }
             }
         } catch (error) {
-            if (error?.response?.status === 404) {
-                return;
-            }
+            if (error?.response?.status === 404) return;
             console.error("Failed to refresh project from Python:", error);
         }
     };
@@ -519,7 +501,6 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
                 reviewFeedback: feedback
             });
 
-            // Use resend-review if we already have review history to avoid locking logic on backend if any
             const endpoint = workflowTimeline.some(e => e.status === 'IN_REVIEW')
                 ? `${pythonApiBase}/api/workflow/resend-review`
                 : `${pythonApiBase}/api/workflow/start-review`;
@@ -570,7 +551,6 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
         }
     };
 
-
     const handleUpdateAndRegenerate = () => {
         const latestFeedback = feedback.length
             ? feedback.map((fb) => fb.comment).join('\n')
@@ -587,89 +567,82 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
         });
     };
 
+    const handleFastTrackRegeneration = async () => {
+        if (!projectId || !token) return;
+        setWorkflowLoading(true);
+        setWorkflowError("");
+        setWorkflowMessage("");
+
+        try {
+            const latestFeedback = feedback.length
+                ? feedback.map((fb) => fb.comment).join('\n')
+                : '';
+
+            const payload = {
+                formData: {
+                    ...(enterpriseFormData || {}),
+                    additionalInstructions: latestFeedback,
+                    projectId: projectId
+                },
+                projectId: projectId,
+                mode: 'quick'
+            };
+
+            const res = await axios.post(`${nodeApiBase}/api/projects/enterprise/generate`, payload, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            if (res.data?.srs_document_path) {
+                setWorkflowMessage("Quick-Regeneration successful! Document updated.");
+            }
+        } catch (error) {
+            console.error("Fast-track regeneration failed", error);
+            setWorkflowError("Fast-track regeneration failed. Try the standard 'Update & Regenerate' flow instead.");
+        } finally {
+            setWorkflowLoading(false);
+        }
+    };
+
     return (
         <section className="py-12 bg-transparent relative overflow-hidden min-h-screen flex flex-col z-10">
-            {/* Background Accents */}
             <div className="absolute top-0 right-0 p-64 bg-[#79c0ff]/5 blur-[120px] rounded-full pointer-events-none"></div>
             <div className="absolute bottom-0 left-0 p-40 bg-[#d29922]/5 blur-[120px] rounded-full pointer-events-none"></div>
 
             <div className="max-w-[1600px] mx-auto px-6 w-full flex-1 flex flex-col">
-
-                {/* Header (Hidden in Studio Mode) */}
                 {!projectId && (
                     <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div>
-                            <motion.div
-                                initial={{ opacity: 0, y: 10 }}
-                                whileInView={{ opacity: 1, y: 0 }}
-                                viewport={{ once: true }}
-                                className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#1f2937] border border-[#30363d] text-[#c9d1d9] text-xs font-medium mb-3"
-                            >
+                            <motion.div initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#1f2937] border border-[#30363d] text-[#c9d1d9] text-xs font-medium mb-3">
                                 <Sparkles size={14} className="text-[#a371f7]" />
                                 <span>Unified AI Workspace</span>
                             </motion.div>
                             <h2 className="text-3xl md:text-4xl font-bold text-white">
                                 DocuVerse <span className="text-[#a371f7]">Studio</span>
                             </h2>
-                            <p className="text-[#8b949e] text-sm mt-1">
-                                Write notes, chat with context, and visualize architecture in one place.
-                            </p>
+                            <p className="text-[#8b949e] text-sm mt-1">Write notes, chat with context, and visualize architecture in one place.</p>
                         </div>
-                        <button
-                            onClick={() => navigate('/studio/demo')}
-                            className="px-6 py-2 bg-[#a371f7] text-white rounded-lg font-bold hover:bg-[#8957e5] transition flex items-center gap-2 shadow-lg shadow-purple-900/20"
-                        >
+                        <button onClick={() => navigate('/studio/demo')} className="px-6 py-2 bg-[#a371f7] text-white rounded-lg font-bold hover:bg-[#8957e5] transition flex items-center gap-2 shadow-lg shadow-purple-900/20">
                             <Code size={18} /> Open Full Studio
                         </button>
                     </div>
                 )}
 
-                {/* Main Workspace (Split Pane) */}
                 <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 h-[750px]">
-
-                    {/* LEFT PANEL: Editor (5 Columns) */}
-                    <motion.div
-                        initial={{ opacity: 0, x: -20 }}
-                        whileInView={{ opacity: 1, x: 0 }}
-                        viewport={{ once: true }}
-                        className="lg:col-span-5 bg-[#161b22] border border-[#30363d] rounded-xl flex flex-col shadow-xl overflow-hidden group focus-within:border-[#a371f7]/50 transition-colors"
-                    >
+                    <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} className="lg:col-span-5 bg-[#161b22] border border-[#30363d] rounded-xl flex flex-col shadow-xl overflow-hidden group focus-within:border-[#a371f7]/50 transition-colors">
                         <div className="h-12 border-b border-[#30363d] bg-[#0d1117]/50 flex items-center justify-between px-4">
                             <div className="flex items-center gap-2 text-[#8b949e] text-xs font-mono">
                                 <FileText size={14} />
                                 <span>requirements.md</span>
                             </div>
                             <div className="flex gap-2">
-                                {loadingInsights && (
-                                    <span className="flex items-center gap-1 text-[#a371f7] text-[10px] animate-pulse">
-                                        <Sparkles size={10} /> Syncing AI...
-                                    </span>
-                                )}
-                                {documentUrl && (
-                                    <a
-                                        href={documentUrl}
-                                        className="flex items-center gap-1 text-[#238636] text-xs font-bold hover:underline"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                    >
-                                        <Download size={12} /> View Report
-                                    </a>
-                                )}
+                                {loadingInsights && <span className="flex items-center gap-1 text-[#a371f7] text-[10px] animate-pulse"><Sparkles size={10} /> Syncing AI...</span>}
+                                {documentUrl && <a href={documentUrl} className="flex items-center gap-1 text-[#238636] text-xs font-bold hover:underline" target="_blank" rel="noopener noreferrer"><Download size={12} /> View Report</a>}
                             </div>
                         </div>
-                        <textarea
-                            value={content}
-                            onChange={(e) => setContent(e.target.value)}
-                            className="flex-1 bg-transparent text-[#c9d1d9] font-mono text-sm leading-relaxed outline-none resize-none p-6 selection:bg-[#a371f7] selection:text-white"
-                            spellCheck="false"
-                            placeholder="Start typing your system requirements..."
-                        />
+                        <textarea value={content} onChange={(e) => setContent(e.target.value)} className="flex-1 bg-transparent text-[#c9d1d9] font-mono text-sm leading-relaxed outline-none resize-none p-6 selection:bg-[#a371f7] selection:text-white" spellCheck="false" placeholder="Start typing your system requirements..." />
                     </motion.div>
 
-                    {/* RIGHT PANEL: Studio (7 Columns) */}
                     <div className="lg:col-span-7 flex flex-col gap-4">
-
-                        {/* Tab Switcher */}
                         <div className="flex flex-wrap gap-2 bg-[#161b22] border border-[#30363d] rounded-lg p-1 w-fit">
                             {[
                                 { id: 'insights', icon: BrainCircuit, label: 'Insights' },
@@ -678,46 +651,21 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
                                 { id: 'workflow', icon: Zap, label: 'Workflow' },
                                 { id: 'feedback', icon: MessageSquare, label: 'Feedback' },
                             ].map(tab => (
-                                <button
-                                    key={tab.id}
-                                    onClick={() => setActiveTab(tab.id)}
-                                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 
-                                        ${activeTab === tab.id ? 'bg-[#21262d] text-white shadow-sm' : 'text-[#8b949e] hover:text-[#c9d1d9]'}`}
-                                >
+                                <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${activeTab === tab.id ? 'bg-[#21262d] text-white shadow-sm' : 'text-[#8b949e] hover:text-[#c9d1d9]'}`}>
                                     <tab.icon size={14} /> {tab.label}
                                 </button>
                             ))}
                         </div>
 
-                        {/* Panel Content container */}
-                        <motion.div
-                            layout
-                            className="flex-1 bg-[#161b22] border border-[#30363d] rounded-xl relative overflow-hidden shadow-xl"
-                        >
-                            {/* --- TAB: INSIGHTS --- */}
+                        <motion.div layout className="flex-1 bg-[#161b22] border border-[#30363d] rounded-xl relative overflow-hidden shadow-xl">
                             {activeTab === 'insights' && (
-                                <motion.div
-                                    initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                                    className="h-full p-6 overflow-y-auto scrollbar-thin scrollbar-thumb-[#30363d]"
-                                >
-                                    <h3 className="text-[#a371f7] text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-2">
-                                        <Sparkles size={14} /> Real-time Analysis
-                                    </h3>
+                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full p-6 overflow-y-auto scrollbar-thin scrollbar-thumb-[#30363d]">
+                                    <h3 className="text-[#a371f7] text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-2"><Sparkles size={14} /> Real-time Analysis</h3>
                                     <div className="space-y-3">
                                         <AnimatePresence>
-                                            {insights.length === 0 && !loadingInsights && (
-                                                <div className="text-center mt-20 text-[#8b949e]">
-                                                    <BrainCircuit size={48} className="mx-auto mb-4 opacity-20" />
-                                                    <p>Type in the editor to generate insights.</p>
-                                                </div>
-                                            )}
+                                            {insights.length === 0 && !loadingInsights && <div className="text-center mt-20 text-[#8b949e]"><BrainCircuit size={48} className="mx-auto mb-4 opacity-20" /><p>Type in the editor to generate insights.</p></div>}
                                             {insights.map((item, index) => (
-                                                <motion.div
-                                                    key={index}
-                                                    initial={{ opacity: 0, scale: 0.95 }}
-                                                    animate={{ opacity: 1, scale: 1 }}
-                                                    className="p-4 bg-[#0d1117] border border-[#30363d] rounded-xl hover:border-[#a371f7]/50 transition-colors group"
-                                                >
+                                                <motion.div key={index} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="p-4 bg-[#0d1117] border border-[#30363d] rounded-xl hover:border-[#a371f7]/50 transition-colors group">
                                                     <div className="flex justify-between items-start mb-2">
                                                         <h4 className="text-white font-medium text-sm group-hover:text-[#a371f7] transition-colors">{item.title}</h4>
                                                         <span className="text-[10px] px-2 py-0.5 rounded-full border border-[#30363d] bg-[#161b22] text-[#8b949e]">{item.type}</span>
@@ -730,63 +678,35 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
                                 </motion.div>
                             )}
 
-                            {/* --- TAB: WORKFLOW (n8n Integration) --- */}
                             {activeTab === 'workflow' && (
                                 <div className="h-full p-6 flex flex-col">
                                     <div className="mb-6">
-                                        <h3 className="text-[#a371f7] text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-2">
-                                            <Zap size={14} /> Automated Review Loop
-                                        </h3>
-                                        <p className="text-sm text-[#8b949e] mb-4">
-                                            Trigger an n8n workflow to send this document for client review.
-                                        </p>
-
-                                        {documentUrl && (
-                                            <div className="mb-4 bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-xs text-[#8b949e] flex items-center justify-between">
-                                                <span>Attached DOCX: {documentUrl}</span>
-                                                <a href={documentUrl} target="_blank" rel="noreferrer" className="text-[#79c0ff] hover:underline">Open</a>
-                                            </div>
-                                        )}
-
+                                        <h3 className="text-[#a371f7] text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-2"><Zap size={14} /> Automated Review Loop</h3>
+                                        <p className="text-sm text-[#8b949e] mb-4">Trigger an n8n workflow to send this document for client review.</p>
+                                        {documentUrl && <div className="mb-4 bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-xs text-[#8b949e] flex items-center justify-between"><span>Attached DOCX: {documentUrl}</span><a href={documentUrl} target="_blank" rel="noreferrer" className="text-[#79c0ff] hover:underline">Open</a></div>}
                                         <div className="flex gap-2">
                                             <div className="relative flex-1">
                                                 <Mail className="absolute left-3 top-2.5 text-[#8b949e]" size={16} />
-                                                <input
-                                                    type="email"
-                                                    placeholder="client@example.com"
-                                                    value={clientEmail}
-                                                    onChange={(e) => setClientEmail(e.target.value)}
-                                                    className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:border-[#a371f7] outline-none"
-                                                />
+                                                <input type="email" placeholder="client@example.com" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:border-[#a371f7] outline-none" />
                                             </div>
-                                            <button
-                                                onClick={handleSendReview}
-                                                disabled={workflowLoading}
-                                                className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition bg-[#238636] text-white hover:bg-[#2ea043] shadow-lg shadow-green-900/20 disabled:bg-[#161b22] disabled:border-[#30363d] disabled:text-[#8b949e] disabled:cursor-not-allowed`}
-                                            >
-                                                {workflowLoading ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div> : <Send size={16} />}
-                                                Send Review
+                                            <button onClick={handleSendReview} disabled={workflowLoading} className="px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition bg-[#238636] text-white hover:bg-[#2ea043] shadow-lg shadow-green-900/20 disabled:bg-[#161b22] disabled:border-[#30363d] disabled:text-[#8b949e] disabled:cursor-not-allowed">
+                                                {workflowLoading ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div> : <Send size={16} />}Send Review
                                             </button>
                                         </div>
                                         {status === 'CHANGES_REQUESTED' && (
-                                            <div className="mt-3 flex gap-2">
-                                                <button
-                                                    onClick={handleUpdateAndRegenerate}
-                                                    className="px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition bg-[#21262d] border border-[#30363d] text-[#c9d1d9] hover:bg-[#30363d]"
-                                                >
-                                                    Update & Regenerate
+                                            <div className="mt-3 flex flex-wrap gap-2">
+                                                <button onClick={handleUpdateAndRegenerate} className="px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 transition bg-[#21262d] border border-[#30363d] text-[#c9d1d9] hover:bg-[#30363d]">
+                                                    <Settings size={14} /> Open Form Wizard
+                                                </button>
+                                                <button onClick={handleFastTrackRegeneration} disabled={workflowLoading} className="px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 transition bg-cyan-900/20 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10">
+                                                    {workflowLoading ? <RefreshCw size={14} className="animate-spin" /> : <Zap size={14} />}Apply Feedback & Auto-Regenerate
                                                 </button>
                                             </div>
                                         )}
-                                        {workflowError && (
-                                            <div className="mt-3 text-xs text-[#ff7b72]">{workflowError}</div>
-                                        )}
-                                        {workflowMessage && (
-                                            <div className="mt-3 text-xs text-[#79c0ff]">{workflowMessage}</div>
-                                        )}
+                                        {workflowError && <div className="mt-3 text-xs text-[#ff7b72]">{workflowError}</div>}
+                                        {workflowMessage && <div className="mt-3 text-xs text-[#79c0ff]">{workflowMessage}</div>}
                                     </div>
 
-                                    {/* Timeline Visual */}
                                     <div className="flex-1 border border-[#30363d] bg-[#0d1117] rounded-xl p-4 overflow-y-auto">
                                         <div className="relative pl-4 space-y-6 before:absolute before:left-[5px] before:top-2 before:bottom-2 before:w-[2px] before:bg-[#30363d]">
                                             <div className="relative">
@@ -794,13 +714,9 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
                                                 <h4 className="text-sm font-bold text-white">Project Created</h4>
                                                 <p className="text-xs text-[#8b949e]">Draft initialized.</p>
                                             </div>
-
                                             {workflowTimeline.map((event, idx) => (
                                                 <motion.div key={`${event.title}-${idx}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="relative">
-                                                    <div className={`absolute -left-[21px] top-1 w-3 h-3 rounded-full border border-[#0d1117] ${event.status === 'APPROVED' ? 'bg-[#238636]' :
-                                                        event.status === 'CHANGES_REQUESTED' ? 'bg-[#ff7b72]' :
-                                                            'bg-[#a371f7]'
-                                                        }`}></div>
+                                                    <div className={`absolute -left-[21px] top-1 w-3 h-3 rounded-full border border-[#0d1117] ${event.status === 'APPROVED' ? 'bg-[#238636]' : event.status === 'CHANGES_REQUESTED' ? 'bg-[#ff7b72]' : 'bg-[#a371f7]'}`}></div>
                                                     <h4 className="text-sm font-bold text-white">{event.title}</h4>
                                                     <p className="text-xs text-[#8b949e]">{event.description}</p>
                                                 </motion.div>
@@ -810,37 +726,22 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
                                 </div>
                             )}
 
-                            {/* --- TAB: FEEDBACK --- */}
                             {activeTab === 'feedback' && (
                                 <div className="h-full p-6">
-                                    <h3 className="text-[#a371f7] text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-2">
-                                        <MessageSquare size={14} /> Client Comments
-                                    </h3>
+                                    <h3 className="text-[#a371f7] text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-2"><MessageSquare size={14} /> Client Comments</h3>
                                     {status === 'CHANGES_REQUESTED' && (
                                         <div className="mb-4 flex gap-2">
-                                            <button
-                                                onClick={handleUpdateAndRegenerate}
-                                                className="px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition bg-[#21262d] border border-[#30363d] text-[#c9d1d9] hover:bg-[#30363d]"
-                                            >
-                                                Update & Regenerate
-                                            </button>
+                                            <button onClick={handleUpdateAndRegenerate} className="px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition bg-[#21262d] border border-[#30363d] text-[#c9d1d9] hover:bg-[#30363d]">Update & Regenerate</button>
                                         </div>
                                     )}
                                     <div className="space-y-4">
                                         {feedback.length === 0 ? (
-                                            <div className="text-center mt-20 text-[#8b949e]">
-                                                <div className="w-16 h-16 bg-[#161b22] rounded-full flex items-center justify-center mx-auto mb-4 border border-[#30363d]">
-                                                    <CheckCircle size={24} className="text-[#238636]" />
-                                                </div>
-                                                <p>No issues reported yet.</p>
-                                            </div>
+                                            <div className="text-center mt-20 text-[#8b949e]"><div className="w-16 h-16 bg-[#161b22] rounded-full flex items-center justify-center mx-auto mb-4 border border-[#30363d]"><CheckCircle size={24} className="text-[#238636]" /></div><p>No issues reported yet.</p></div>
                                         ) : (
                                             feedback.map((fb, i) => (
                                                 <div key={i} className="bg-[#161b22] border border-[#ff7b72]/30 p-4 rounded-xl">
                                                     <div className="flex justify-between items-center mb-2">
-                                                        <span className="text-[#ff7b72] text-xs font-bold flex items-center gap-2">
-                                                            <AlertCircle size={12} /> {fb.source}
-                                                        </span>
+                                                        <span className="text-[#ff7b72] text-xs font-bold flex items-center gap-2"><AlertCircle size={12} /> {fb.source}</span>
                                                         <span className="text-[#8b949e] text-[10px]">{new Date(fb.date).toLocaleDateString()}</span>
                                                     </div>
                                                     <p className="text-sm text-[#c9d1d9]">{fb.comment}</p>
@@ -851,106 +752,41 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
                                 </div>
                             )}
 
-                            {/* --- TAB: CHAT --- */}
                             {activeTab === 'chat' && (
                                 <div className="h-full flex flex-col">
                                     <div className="border-b border-[#30363d] bg-[#0d1117]/50 px-4 py-3 flex flex-col gap-3">
                                         <div className="flex flex-wrap items-center gap-2">
-                                            <button
-                                                onClick={refreshChatDiagramStatus}
-                                                className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${chatDiagramEnabled ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e]'} ${chatDiagramStatusLoading ? 'opacity-70' : 'hover:border-[#3fb950] hover:text-[#3fb950]'}`}
-                                                title={chatDiagramEnabled ? 'Diagram enabled. Click to refresh.' : `Diagram disabled: ${chatDiagramReason || 'Unknown reason'}`}
-                                                disabled={chatDiagramStatusLoading}
-                                            >
-                                                <RefreshCw size={12} className={chatDiagramStatusLoading ? 'animate-spin' : ''} />
-                                                {chatDiagramEnabled ? 'Diagram On' : 'Diagram Off'}
-                                            </button>
-                                            <button
-                                                onClick={refreshChatPhotoStatus}
-                                                className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${chatPhotoEnabled ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e]'} ${chatPhotoStatusLoading ? 'opacity-70' : 'hover:border-[#3fb950] hover:text-[#3fb950]'}`}
-                                                title={chatPhotoEnabled ? 'Image enabled. Click to refresh.' : `Image disabled: ${chatPhotoReason || 'Unknown reason'}`}
-                                                disabled={chatPhotoStatusLoading}
-                                            >
-                                                <RefreshCw size={12} className={chatPhotoStatusLoading ? 'animate-spin' : ''} />
-                                                {chatPhotoEnabled ? 'Image On' : 'Image Off'}
-                                            </button>
-                                            <button
-                                                onClick={() => setChatMode((prev) => (prev === "image" ? "text" : "image"))}
-                                                className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${chatMode === 'image' ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e]'} ${chatMode === 'image' && chatImageType === 'diagram' && !chatDiagramEnabled ? 'opacity-50 cursor-not-allowed' : ''} ${chatMode === 'image' && chatImageType === 'photo' && !chatPhotoEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                                title="Toggle image mode"
-                                                disabled={chatMode === 'image' && ((chatImageType === 'diagram' && !chatDiagramEnabled) || (chatImageType === 'photo' && !chatPhotoEnabled))}
-                                            >
-                                                <ImageIcon size={12} />
-                                                {chatMode === 'image' ? 'Image Mode' : 'Text Mode'}
-                                            </button>
+                                            <button onClick={refreshChatDiagramStatus} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${chatDiagramEnabled ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e]'} ${chatDiagramStatusLoading ? 'opacity-70' : 'hover:border-[#3fb950] hover:text-[#3fb950]'}`} disabled={chatDiagramStatusLoading}><RefreshCw size={12} className={chatDiagramStatusLoading ? 'animate-spin' : ''} />{chatDiagramEnabled ? 'Diagram On' : 'Diagram Off'}</button>
+                                            <button onClick={refreshChatPhotoStatus} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${chatPhotoEnabled ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e]'} ${chatPhotoStatusLoading ? 'opacity-70' : 'hover:border-[#3fb950] hover:text-[#3fb950]'}`} disabled={chatPhotoStatusLoading}><RefreshCw size={12} className={chatPhotoStatusLoading ? 'animate-spin' : ''} />{chatPhotoEnabled ? 'Image On' : 'Image Off'}</button>
+                                            <button onClick={() => setChatMode((prev) => (prev === "image" ? "text" : "image"))} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${chatMode === 'image' ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e]'}`}><ImageIcon size={12} />{chatMode === 'image' ? 'Image Mode' : 'Text Mode'}</button>
                                             <div className="flex items-center gap-1">
-                                                <button
-                                                    onClick={() => setChatImageType("diagram")}
-                                                    className={`text-xs px-2 py-0.5 rounded border transition ${chatImageType === 'diagram' ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e]'}`}
-                                                    disabled={!chatDiagramEnabled}
-                                                    title={chatDiagramEnabled ? 'Use diagram generation' : `Diagram disabled: ${chatDiagramReason}`}
-                                                >
-                                                    Diagram
-                                                </button>
-                                                <button
-                                                    onClick={() => setChatImageType("photo")}
-                                                    className={`text-xs px-2 py-0.5 rounded border transition ${chatImageType === 'photo' ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e]'}`}
-                                                    disabled={!chatPhotoEnabled}
-                                                    title={chatPhotoEnabled ? 'Use image generation' : `Image disabled: ${chatPhotoReason}`}
-                                                >
-                                                    Image
-                                                </button>
+                                                <button onClick={() => setChatImageType("diagram")} className={`text-xs px-2 py-0.5 rounded border transition ${chatImageType === 'diagram' ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e]'}`} disabled={!chatDiagramEnabled}>Diagram</button>
+                                                <button onClick={() => setChatImageType("photo")} className={`text-xs px-2 py-0.5 rounded border transition ${chatImageType === 'photo' ? 'border-[#3fb950] text-[#3fb950]' : 'border-[#30363d] text-[#8b949e]'}`} disabled={!chatPhotoEnabled}>Image</button>
                                             </div>
-                                            <span className="text-[11px] text-[#8b949e]">
-                                                I can style the Mermaid output further or add color themes and grouping.
-                                            </span>
                                         </div>
                                         <div className="flex flex-wrap gap-2">
                                             {imagePresets.map((preset) => (
-                                                <button
-                                                    key={preset.id}
-                                                    onClick={() => handleGenerateChatImage(buildImagePromptFromNotes(preset.id), "diagram")}
-                                                    disabled={!chatDiagramEnabled || chatImageLoading}
-                                                    className="px-3 py-1.5 text-xs rounded-lg border border-[#30363d] bg-[#0d1117] text-[#8b949e] hover:text-[#3fb950] hover:border-[#3fb950] transition disabled:opacity-50"
-                                                    title={chatDiagramEnabled ? `Generate ${preset.label}` : `Diagram disabled: ${chatDiagramReason}`}
-                                                >
-                                                    {preset.label}
-                                                </button>
+                                                <button key={preset.id} onClick={() => handleGenerateChatImage(buildImagePromptFromNotes(preset.id), "diagram")} disabled={!chatDiagramEnabled || chatImageLoading} className="px-3 py-1.5 text-xs rounded-lg border border-[#30363d] bg-[#0d1117] text-[#8b949e] hover:text-[#3fb950] hover:border-[#3fb950] transition disabled:opacity-50">{preset.label}</button>
                                             ))}
                                         </div>
                                     </div>
                                     <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-[#30363d]">
                                         {chatMessages.map((msg, i) => (
                                             <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 
-                                                    ${msg.role === 'ai' ? 'bg-[#a371f7]/10 text-[#a371f7]' : 'bg-[#79c0ff]/10 text-[#79c0ff]'}`}>
-                                                    {msg.role === 'ai' ? <Bot size={14} /> : <User size={14} />}
-                                                </div>
+                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${msg.role === 'ai' ? 'bg-[#a371f7]/10 text-[#a371f7]' : 'bg-[#79c0ff]/10 text-[#79c0ff]'}`}>{msg.role === 'ai' ? <Bot size={14} /> : <User size={14} />}</div>
                                                 <div className={`p-3 rounded-xl max-w-[85%] text-sm ${msg.role === 'ai' ? 'bg-[#21262d] text-[#c9d1d9]' : 'bg-[#1f6feb] text-white'}`}>
                                                     {msg.type === 'image' ? (
                                                         <div className="space-y-2">
                                                             <img src={msg.imageUrl} alt={msg.text} className="rounded-lg border border-[#30363d]" />
                                                             {msg.imageType === 'diagram' && (
                                                                 <div className="flex gap-2">
-                                                                    <button
-                                                                        onClick={() => downloadImage(msg.imageUrl, 'studio-diagram.png')}
-                                                                        className="px-2 py-1 text-xs rounded border border-[#30363d] text-[#8b949e] hover:text-[#c9d1d9] hover:border-[#c9d1d9] transition"
-                                                                    >
-                                                                        Download Diagram
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={appendLastDiagramToSrs}
-                                                                        className="px-2 py-1 text-xs rounded border border-[#a371f7] text-[#a371f7] hover:bg-[#a371f7]/10 transition"
-                                                                    >
-                                                                        Add to SRS
-                                                                    </button>
+                                                                    <button onClick={() => downloadImage(msg.imageUrl, 'studio-diagram.png')} className="px-2 py-1 text-xs rounded border border-[#30363d] text-[#8b949e] hover:text-[#c9d1d9] hover:border-[#c9d1d9] transition">Download Diagram</button>
+                                                                    <button onClick={appendLastDiagramToSrs} className="px-2 py-1 text-xs rounded border border-[#a371f7] text-[#a371f7] hover:bg-[#a371f7]/10 transition">Add to SRS</button>
                                                                 </div>
                                                             )}
                                                             <div className="text-xs text-[#8b949e]">{msg.text}</div>
                                                         </div>
-                                                    ) : (
-                                                        msg.text
-                                                    )}
+                                                    ) : msg.text}
                                                 </div>
                                             </div>
                                         ))}
@@ -967,80 +803,24 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
                                     </div>
                                     <div className="p-4 border-t border-[#30363d] bg-[#0d1117]">
                                         <div className="relative">
-                                            <input
-                                                type="text"
-                                                className="w-full bg-[#161b22] border border-[#30363d] rounded-lg pl-4 pr-10 py-3 text-sm text-white focus:border-[#a371f7] outline-none transition-colors"
-                                                placeholder={chatMode === 'image'
-                                                    ? (chatImageType === 'diagram' ? "Describe the diagram to generate..." : "Describe the image to generate...")
-                                                    : "Ask about your notes or type /diagram or /image prompt"}
-                                                value={chatInput}
-                                                onChange={(e) => setChatInput(e.target.value)}
-                                                onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                                            />
-                                            <button
-                                                onClick={handleSendMessage}
-                                                className="absolute right-2 top-2.5 p-1.5 text-[#a371f7] hover:bg-[#a371f7]/10 rounded-md transition"
-                                            >
-                                                <Send size={16} />
-                                            </button>
+                                            <input type="text" className="w-full bg-[#161b22] border border-[#30363d] rounded-lg pl-4 pr-10 py-3 text-sm text-white focus:border-[#a371f7] outline-none transition-colors" placeholder={chatMode === 'image' ? "Describe the image to generate..." : "Ask about your notes or type /diagram or /image prompt"} value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()} />
+                                            <button onClick={handleSendMessage} className="absolute right-2 top-2.5 p-1.5 text-[#a371f7] hover:bg-[#a371f7]/10 rounded-md transition"><Send size={16} /></button>
                                         </div>
                                     </div>
                                 </div>
                             )}
 
-                            {/* --- TAB: DIAGRAM VISUALIZER --- */}
                             {activeTab === 'diagram' && (
                                 <div className="h-full relative bg-[#010409]">
-                                    {/* Generate Button Overlay */}
                                     <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
-                                        <button
-                                            onClick={generateDiagram}
-                                            disabled={loadingDiagram}
-                                            className="px-3 py-1.5 bg-[#238636] text-white text-xs font-bold rounded shadow-lg hover:bg-[#2ea043] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                                        >
-                                            {loadingDiagram ? <div className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin"></div> : <Workflow size={14} />}
-                                            {loadingDiagram ? 'Generating...' : 'Generate New Diagram'}
-                                        </button>
-                                        <button
-                                            onClick={handleDownloadDiagramImage}
-                                            disabled={diagramImageLoading}
-                                            className="px-3 py-1.5 bg-[#21262d] text-white text-xs font-bold rounded shadow-lg hover:bg-[#30363d] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                                        >
-                                            {diagramImageLoading ? <div className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin"></div> : <Download size={14} />}
-                                            Download Image
-                                        </button>
-                                        <button
-                                            onClick={handleAppendDiagramToDoc}
-                                            disabled={diagramImageLoading}
-                                            className="px-3 py-1.5 bg-[#a371f7] text-white text-xs font-bold rounded shadow-lg hover:bg-[#8957e5] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                                        >
-                                            {diagramImageLoading ? <div className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin"></div> : <Share2 size={14} />}
-                                            Add to SRS
-                                        </button>
+                                        <button onClick={generateDiagram} disabled={loadingDiagram} className="px-3 py-1.5 bg-[#238636] text-white text-xs font-bold rounded shadow-lg hover:bg-[#2ea043] disabled:opacity-50 flex items-center gap-2">{loadingDiagram ? <div className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin"></div> : <Workflow size={14} />}{loadingDiagram ? 'Generating...' : 'Generate New Diagram'}</button>
+                                        <button onClick={handleDownloadDiagramImage} disabled={diagramImageLoading} className="px-3 py-1.5 bg-[#21262d] text-white text-xs font-bold rounded shadow-lg hover:bg-[#30363d] disabled:opacity-50 flex items-center gap-2">{diagramImageLoading ? <div className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin"></div> : <Download size={14} />}Download Image</button>
+                                        <button onClick={handleAppendDiagramToDoc} disabled={diagramImageLoading} className="px-3 py-1.5 bg-[#a371f7] text-white text-xs font-bold rounded shadow-lg hover:bg-[#8957e5] disabled:opacity-50 flex items-center gap-2">{diagramImageLoading ? <div className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin"></div> : <Share2 size={14} />}Add to SRS</button>
                                     </div>
-
-                                    {diagramImageError && (
-                                        <div className="absolute top-16 right-4 z-50 text-xs text-[#ff7b72] bg-[#0d1117] border border-[#30363d] rounded px-3 py-2">
-                                            {diagramImageError}
-                                        </div>
-                                    )}
-
-                                    {nodes.length === 0 && !loadingDiagram && (
-                                        <div className="absolute inset-0 flex flex-col items-center justify-center text-[#8b949e] z-40 pointer-events-none">
-                                            <Workflow size={48} className="mb-4 opacity-50" />
-                                            <p className="text-sm">Click "Generate New Diagram" to visualize your notes.</p>
-                                        </div>
-                                    )}
-
+                                    {diagramImageError && <div className="absolute top-16 right-4 z-50 text-xs text-[#ff7b72] bg-[#0d1117] border border-[#30363d] rounded px-3 py-2">{diagramImageError}</div>}
+                                    {nodes.length === 0 && !loadingDiagram && <div className="absolute inset-0 flex flex-col items-center justify-center text-[#8b949e] z-40 pointer-events-none"><Workflow size={48} className="mb-4 opacity-50" /><p className="text-sm">Click "Generate New Diagram" to visualize your notes.</p></div>}
                                     <div className="h-full w-full">
-                                        <ReactFlow
-                                            nodes={nodes}
-                                            edges={edges}
-                                            onNodesChange={onNodesChange}
-                                            onEdgesChange={onEdgesChange}
-                                            fitView
-                                            proOptions={{ hideAttribution: true }}
-                                        >
+                                        <ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} fitView proOptions={{ hideAttribution: true }}>
                                             <Background color="#30363d" gap={20} />
                                             <Controls className="bg-[#161b22] border border-[#30363d] fill-gray-400 text-gray-400" />
                                             <MiniMap style={{ background: '#161b22', border: '1px solid #30363d' }} nodeColor="#30363d" />
@@ -1048,7 +828,6 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
                                     </div>
                                 </div>
                             )}
-
                         </motion.div>
                     </div>
                 </div>

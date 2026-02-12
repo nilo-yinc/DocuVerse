@@ -107,7 +107,8 @@ const StudioPage = () => {
                     reviewFeedback: data.reviewFeedback || [],
                     workflowEvents: data.workflowEvents || [],
                     insights: data.insights || [],
-                    clientEmail: data.clientEmail || ""
+                    clientEmail: data.clientEmail || "",
+                    enterpriseFormData: data.enterpriseFormData || {}
                 });
             } catch (error) {
                 console.error("Failed to load project", error);
@@ -189,6 +190,7 @@ const StudioPage = () => {
                 documentUrl={project.documentUrl}
                 reviewedDocumentUrl={project.reviewedDocumentUrl}
                 initialClientEmail={project.clientEmail}
+                enterpriseFormData={project.enterpriseFormData}
             />
         </div>
     );

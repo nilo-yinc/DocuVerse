@@ -1,17 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 // import { buildEnterpriseDocx } from '../utils/buildEnterpriseDocx'; // Will create next
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { User, FileText } from 'lucide-react';
 import ProfileSettings from './ProfileSettings';
+import axios from 'axios';
 
 const EnterpriseForm = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { user } = useAuth();
+    const { user, token } = useAuth();
     const [showProfile, setShowProfile] = useState(false);
     const [step, setStep] = useState(1);
+    const loadedFromProjectRef = useRef(false);
 
     // State matching the provided images
     const [formData, setFormData] = useState({
@@ -43,6 +45,7 @@ const EnterpriseForm = () => {
         authRequired: 'Yes',
         sensitiveData: 'Yes',
         compliance: [], // GDPR, HIPAA etc
+        compliance_other: '',
 
         // 6. Technical
         backendPref: '',
@@ -80,6 +83,7 @@ const EnterpriseForm = () => {
         authRequired: 'Yes',
         sensitiveData: 'Yes',
         compliance: [],
+        compliance_other: '',
         backendPref: '',
         backendPref_other: '',
         dbPref: '',
@@ -163,9 +167,119 @@ const EnterpriseForm = () => {
         const isUpdateFlow = params.get('update') === '1' || location.state?.update === true;
         const storedProjectId = localStorage.getItem('autoSRS_activeProjectId');
         const projectId = isUpdateFlow ? (location.state?.projectId || formData.projectId || storedProjectId) : null;
-        const payload = { ...formData, projectId: projectId || '' };
+        const normalizedCompliance = (formData.compliance || []).map((c) => {
+            if (c === 'Other') {
+                return formData.compliance_other
+                    ? `Other (${formData.compliance_other})`
+                    : 'Other';
+            }
+            return c;
+        });
+
+        const normalizedUsers = (formData.targetUsers || []).map((u) => {
+            if (u === 'Other' || u.startsWith('Other')) {
+                return formData.otherUser
+                    ? `Other (${formData.otherUser})`
+                    : u;
+            }
+            return u;
+        });
+
+        const payload = { ...formData, projectId: projectId || '', targetUsers: normalizedUsers, compliance: normalizedCompliance };
         navigate('/enterprise/generation', { state: { formData: payload, projectId, update: isUpdateFlow } });
     };
+
+    const handleClearForm = () => {
+        const params = new URLSearchParams(location.search);
+        const isUpdateFlow = params.get('update') === '1' || location.state?.update === true;
+        const projectId = location.state?.projectId || params.get('projectId') || '';
+        localStorage.removeItem('autoSRS_enterpriseForm');
+        setFormData({
+            ...defaultFormData,
+            projectId: isUpdateFlow ? projectId : ''
+        });
+        setStep(1);
+    };
+
+    const mapProjectToForm = (project) => {
+        const enterprise = project?.enterpriseData || {};
+        const pi = enterprise.project_identity || {};
+        const sc = enterprise.system_context || {};
+        const fs = enterprise.functional_scope || {};
+        const nfr = enterprise.non_functional_requirements || {};
+        const sec = enterprise.security_and_compliance || {};
+        const tech = enterprise.technical_preferences || {};
+        const output = enterprise.output_control || {};
+
+        const mapScale = (value) => {
+            if (!value) return '';
+            if (value.includes('<100')) return '< 100 Users';
+            if (value.includes('100-1k') || value.includes('1k')) return '100 - 1,000 Users';
+            if (value.includes('1k-100k') || value.includes('10,000')) return '1,000 - 10,000 Users';
+            if (value.includes('>100k')) return '10,000+ Users';
+            return '';
+        };
+
+        const mapPerformance = (value) => {
+            if (!value) return '';
+            if (value.toLowerCase().includes('real')) return 'Real-time (ms latency)';
+            if (value.toLowerCase().includes('high')) return 'High Performance (< 1s load)';
+            return 'Standard (2-3s load)';
+        };
+
+        const mapDetail = (value) => {
+            if (!value) return 'Professional (Enterprise)';
+            if (value.toLowerCase().includes('enterprise')) return 'Professional (Enterprise)';
+            if (value.toLowerCase().includes('technical')) return 'Standard (Academic)';
+            return 'Brief (Startup MVP)';
+        };
+
+        return {
+            projectId: project?._id || '',
+            projectName: pi.project_name || '',
+            authors: Array.isArray(pi.author) ? pi.author.join('\n') : (pi.author || ''),
+            organization: pi.organization || '',
+            problemStatement: pi.problem_statement || '',
+            targetUsers: Array.isArray(pi.target_users) ? pi.target_users : [],
+            appType: sc.application_type || '',
+            domain: sc.domain || '',
+            coreFeatures: Array.isArray(fs.core_features) ? fs.core_features.join('\n') : '',
+            userFlow: fs.primary_user_flow || '',
+            userScale: mapScale(nfr.expected_user_scale || ''),
+            performance: mapPerformance(nfr.performance_expectation || ''),
+            authRequired: sec.authentication_required ? 'Yes' : 'No',
+            sensitiveData: sec.sensitive_data_handling ? 'Yes' : 'No',
+            compliance: Array.isArray(sec.compliance_requirements) ? sec.compliance_requirements : [],
+            backendPref: tech.preferred_backend || '',
+            dbPref: tech.database_preference || '',
+            deploymentPref: tech.deployment_preference || '',
+            detailLevel: mapDetail(output.srs_detail_level || ''),
+            additionalInstructions: formData.additionalInstructions || ''
+        };
+    };
+
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const isUpdateFlow = params.get('update') === '1' || location.state?.update === true;
+        const projectId = location.state?.projectId || params.get('projectId');
+        if (!isUpdateFlow || !projectId || !token || loadedFromProjectRef.current) return;
+
+        const loadProject = async () => {
+            try {
+                const nodeApiBase = import.meta.env.VITE_NODE_API_URL
+                    || (typeof window !== 'undefined' ? `http://${window.location.hostname || 'localhost'}:5000` : 'http://localhost:5000');
+                const res = await axios.get(`${nodeApiBase}/api/projects/${projectId}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const mapped = mapProjectToForm(res.data);
+                loadedFromProjectRef.current = true;
+                setFormData(prev => ({ ...prev, ...mapped }));
+            } catch (err) {
+                console.error("Failed to load project for update", err);
+            }
+        };
+        loadProject();
+    }, [location.state, location.search, token]);
 
     const sectionVariants = {
         hidden: { opacity: 0, x: 20 },
@@ -306,6 +420,14 @@ const EnterpriseForm = () => {
                             {step === 1 && (
                                 <div>
                                     <h2 className="text-3xl font-bold text-white mb-6 border-l-4 border-neon-purple pl-4">I. Project Identity</h2>
+                                    <div className="mb-6 flex justify-end">
+                                        <button
+                                            onClick={handleClearForm}
+                                            className="px-4 py-2 text-xs uppercase tracking-wider border border-gray-700 text-gray-300 rounded hover:border-neon-blue hover:text-neon-blue transition"
+                                        >
+                                            Clear Form
+                                        </button>
+                                    </div>
                                     {renderInput('Project Name', 'projectName', 'e.g. Customer Churn Prediction System')}
                                     {renderInput('Author(s)', 'authors', 'Enter names (one per line)', 'textarea')}
                                     {renderInput('Organization', 'organization', 'e.g. TechCorp Solutions')}
@@ -314,7 +436,7 @@ const EnterpriseForm = () => {
                                     <div className="mb-6">
                                         <label className="block text-neon-blue text-sm font-bold mb-2 uppercase">Target Users <span className="text-red-500">*</span></label>
                                         <div className="flex flex-wrap gap-4">
-                                            {['Admin', 'End User', 'Manager', 'Analyst', 'Customer'].map(u => (
+                                            {['Admin', 'End User', 'Manager', 'Analyst', 'Customer', 'Other (Supplier, Vendor, Auditor)'].map(u => (
                                                 <label key={u} className="flex items-center space-x-2 bg-dark-input px-4 py-2 rounded cursor-pointer border border-gray-700 hover:border-neon-purple transition">
                                                     <input
                                                         type="checkbox"
@@ -326,6 +448,21 @@ const EnterpriseForm = () => {
                                                 </label>
                                             ))}
                                         </div>
+                                        {formData.targetUsers.includes('Other') && (
+                                            <motion.div
+                                                initial={{ opacity: 0, height: 0 }}
+                                                animate={{ opacity: 1, height: 'auto' }}
+                                                className="mt-3"
+                                            >
+                                                <input
+                                                    type="text"
+                                                    value={formData.otherUser || ''}
+                                                    onChange={e => updateField('otherUser', e.target.value)}
+                                                    className="w-full bg-dark-input border border-neon-blue/50 rounded p-3 text-white focus:border-neon-blue outline-none placeholder:text-gray-600"
+                                                    placeholder="Specify other target users (e.g., Supplier, Vendor, Auditor)..."
+                                                />
+                                            </motion.div>
+                                        )}
                                     </div>
                                 </div>
                             )}
@@ -377,7 +514,7 @@ const EnterpriseForm = () => {
                                     <div className="mb-6">
                                         <label className="block text-neon-blue text-sm font-bold mb-2 uppercase">Compliance Requirements</label>
                                         <div className="flex flex-wrap gap-4">
-                                            {['GDPR', 'HIPAA', 'PCI-DSS', 'SOC2'].map(c => (
+                                            {['GDPR', 'CCPA', 'HIPAA', 'PCI-DSS', 'SOC2', 'SOC1', 'ISO 27001', 'ISO 27018', 'SOX', 'GLBA', 'FERPA', 'FedRAMP', 'NIST 800-53', 'Other'].map(c => (
                                                 <label key={c} className="flex items-center space-x-2 bg-dark-input px-4 py-2 rounded cursor-pointer border border-gray-700 hover:border-neon-purple transition">
                                                     <input
                                                         type="checkbox"
@@ -389,6 +526,21 @@ const EnterpriseForm = () => {
                                                 </label>
                                             ))}
                                         </div>
+                                        {formData.compliance.includes('Other') && (
+                                            <motion.div
+                                                initial={{ opacity: 0, height: 0 }}
+                                                animate={{ opacity: 1, height: 'auto' }}
+                                                className="mt-3"
+                                            >
+                                                <input
+                                                    type="text"
+                                                    value={formData.compliance_other || ''}
+                                                    onChange={e => updateField('compliance_other', e.target.value)}
+                                                    className="w-full bg-dark-input border border-neon-blue/50 rounded p-3 text-white focus:border-neon-blue outline-none placeholder:text-gray-600"
+                                                    placeholder="Specify other compliance standards (e.g., ISO 27001, SOX, GLBA)"
+                                                />
+                                            </motion.div>
+                                        )}
                                     </div>
                                 </div>
                             )}

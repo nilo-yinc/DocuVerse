@@ -198,19 +198,23 @@ router.post('/enterprise/generate', isLoggedIn, async (req, res) => {
                 target_users: (formData.targetUsers && formData.targetUsers.length > 0) ? formData.targetUsers : ['End User']
             },
             system_context: {
-                application_type: formData.appType || 'Web Application',
-                domain: formData.domain || 'General'
+                application_type: (formData.appType === 'Other' && formData.appType_other) ? formData.appType_other : (formData.appType || 'Web Application'),
+                domain: (formData.domain === 'Other' && formData.domain_other) ? formData.domain_other : (formData.domain || 'General')
             },
             functional_scope: {
                 core_features: formData.coreFeatures ? formData.coreFeatures.split('\n').filter(Boolean) : ['Default Feature'],
                 primary_user_flow: formData.userFlow || 'Standard user flow.'
             },
             non_functional_requirements: {
-                expected_user_scale: safeUserScale === '< 100 Users' ? '<100' :
+                expected_user_scale: (safeUserScale === 'Other' && formData.userScale_other) ? formData.userScale_other :
+                                   safeUserScale === '< 100 Users' ? '<100' :
                                    safeUserScale === '100 - 1,000 Users' ? '100-1k' :
-                                   safeUserScale === '1,000 - 10,000 Users' ? '1k-100k' : '>100k',
-                performance_expectation: safePerformance.includes('Standard') ? 'Normal' :
-                                       safePerformance.includes('High') ? 'High' : 'Real-time'
+                                   safeUserScale === '1,000 - 10,000 Users' ? '1k-100k' : 
+                                   safeUserScale === '10,000+ Users' ? '>100k' : safeUserScale,
+                performance_expectation: (safePerformance === 'Other' && formData.performance_other) ? formData.performance_other :
+                                       safePerformance.includes('Standard') ? 'Normal' :
+                                       safePerformance.includes('High') ? 'High' : 
+                                       safePerformance === 'Real-time (ms latency)' ? 'Real-time' : safePerformance
             },
             security_and_compliance: {
                 authentication_required: formData.authRequired === 'Yes',
@@ -218,14 +222,15 @@ router.post('/enterprise/generate', isLoggedIn, async (req, res) => {
                 compliance_requirements: formData.compliance || []
             },
             technical_preferences: {
-                preferred_backend: formData.backendPref !== 'No Preference' ? formData.backendPref : null,
-                database_preference: formData.dbPref !== 'No Preference' ? formData.dbPref : null,
-                deployment_preference: formData.deploymentPref !== 'No Preference' ? formData.deploymentPref : null
+                preferred_backend: (formData.backendPref === 'Other' && formData.backendPref_other) ? formData.backendPref_other : (formData.backendPref !== 'No Preference' ? formData.backendPref : null),
+                database_preference: (formData.dbPref === 'Other' && formData.dbPref_other) ? formData.dbPref_other : (formData.dbPref !== 'No Preference' ? formData.dbPref : null),
+                deployment_preference: (formData.deploymentPref === 'Other' && formData.deploymentPref_other) ? formData.deploymentPref_other : (formData.deploymentPref !== 'No Preference' ? formData.deploymentPref : null)
             },
             output_control: {
                 // Map frontend "Standard", "Professional", "Brief" to backend valid levels
                 srs_detail_level: safeDetailLevel.includes('Professional') ? 'Enterprise-grade' :
-                                safeDetailLevel.includes('Standard') ? 'Technical' : 'High-level'
+                                safeDetailLevel.includes('Standard') ? 'Technical' : 'High-level',
+                additional_instructions: formData.additionalInstructions || ''
             }
         };
         console.log("DEBUG: srsRequest constructed:", JSON.stringify(srsRequest, null, 2));
@@ -241,26 +246,34 @@ router.post('/enterprise/generate', isLoggedIn, async (req, res) => {
             project = await Project.findById(resolvedProjectId);
             if (!project) return res.status(404).json({ msg: 'Project not found' });
             if (project.userId.toString() !== req.user.id) return res.status(401).json({ msg: 'Not authorized' });
+            const normalizedDomain = (formData.domain === 'Other' && formData.domain_other) ? formData.domain_other : (formData.domain || 'General');
             project.title = formData.projectName || 'Untitled Project';
-            project.domain = formData.domain || 'General';
+            project.domain = normalizedDomain;
+            project.techStack = {
+                backend: (formData.backendPref === 'Other' && formData.backendPref_other) ? formData.backendPref_other : formData.backendPref,
+                database: (formData.dbPref === 'Other' && formData.dbPref_other) ? formData.dbPref_other : formData.dbPref
+            };
             project.enterpriseData = srsRequest;
+            project.enterpriseFormData = formData;
             project.status = 'DRAFT';
             project.workflowEvents = project.workflowEvents || [];
             project.workflowEvents.push({
                 date: new Date().toISOString(),
-                title: 'Document Updated',
-                description: `SRS regenerated in ${mode} mode.`,
+                title: 'Document Regenerated',
+                description: `SRS updated/regenerated with new inputs or feedback in ${mode} mode.`,
                 status: 'DRAFT'
             });
         } else {
             let shareId = generateShareId();
             while (await Project.findOne({ shareId })) shareId = generateShareId();
 
+            const normalizedDomain = (formData.domain === 'Other' && formData.domain_other) ? formData.domain_other : (formData.domain || 'General');
             project = new Project({
                 userId: req.user.id,
                 title: formData.projectName || 'Untitled Project',
-                domain: formData.domain || 'General',
+                domain: normalizedDomain,
                 enterpriseData: srsRequest,
+                enterpriseFormData: formData,
                 shareId: shareId,
                 status: 'DRAFT',
                 workflowEvents: [{
