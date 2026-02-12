@@ -33,7 +33,8 @@ const LandingPage = () => {
 
     const handleViewSample = () => {
         // Open the sample report from backend static file
-        window.open('/static/sample_report.docx', '_blank');
+        const backendUrl = import.meta.env.VITE_NODE_API_URL || '';
+        window.open(`${backendUrl}/static/sample_report.docx`, '_blank');
     };
 
     const ScrollSection = ({ children, className = "" }) => (

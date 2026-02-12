@@ -334,12 +334,20 @@ router.post('/enterprise/generate', isLoggedIn, async (req, res) => {
         });
 
     } catch (err) {
-        console.error("Enterprise Generation Error:", err.message);
+        console.error("Enterprise Generation ERROR [FULL]:", err);
         if (err.response) {
-            console.error("Python Backend Error:", err.response.data);
-            return res.status(500).json({ msg: 'Generation Engine Failed', details: err.response.data });
+            console.error("Python Backend Error Data:", err.response.data);
+            return res.status(500).json({ 
+                msg: 'Generation Engine Failed', 
+                details: err.response.data,
+                error: err.message 
+            });
         }
-        res.status(500).json({ msg: err.message || 'Server Error' });
+        res.status(500).json({ 
+            msg: 'Generation Engine Failed', 
+            details: err.message,
+            stack: process.env.NODE_ENV === 'development' ? err.stack : undefined 
+        });
     }
 });
 

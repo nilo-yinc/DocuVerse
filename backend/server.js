@@ -39,6 +39,9 @@ app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 app.use(cookieParser());
 
+// Serve static files from the beta folder (e.g., sample documents)
+app.use('/static', express.static(path.join(__dirname, 'beta/static')));
+
 // Public DOCX downloads (served from MongoDB GridFS)
 // Keeps the same URL prefix the Python backend used: /download_srs/<filename>
 app.get('/download_srs/:filename', (req, res) => {
