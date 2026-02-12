@@ -281,7 +281,8 @@ router.post('/enterprise/generate', isLoggedIn, async (req, res) => {
         await project.save();
 
         // 3. Inject Live Link and ID into SRS Request
-        srsRequest.project_identity.live_link = `https://docuverse.app/demo/${project._id}`;
+        const frontendUrl = String(process.env.FRONTEND_URL || 'https://docuverse.app').replace(/\/+$/, '');
+        srsRequest.project_identity.live_link = `${frontendUrl}/demo/${project._id}`;
         srsRequest.project_identity.project_id = project._id.toString();
 
         // 4. Call Python Backend (with expanded data)

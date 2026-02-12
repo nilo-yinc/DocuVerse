@@ -36,10 +36,19 @@ const isLoggedIn = (req, res, next) => {
     req.user = decoded;
     next();
   } catch (error) {
-    console.error("Error verifying token:", error);
+    console.error("Error verifying token:", error.message);
+    
+    // Handle specific JWT errors as 401
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        status: false,
+        message: "Unauthorized access - Invalid or expired token",
+      });
+    }
+
     return res.status(500).json({
       status: false,
-      message: "Internal server error",
+      message: "Internal server error during authentication",
     });
   }
 };
