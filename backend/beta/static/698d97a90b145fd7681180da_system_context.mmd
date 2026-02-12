@@ -1,0 +1,11 @@
+flowchart LR
+EXT1["Email/SMS Gateway"]
+EXT2["Payment/3rd-Party API"]
+EXT3["Reporting/BI Tool"]
+SYS["Untitled Project<br/>General Domain"]
+E0["End User"]
+    E0 -->|Requests/Actions| SYS
+    SYS -->|Responses/Notifications| E0
+    SYS -->|Alerts/Updates| EXT1
+    SYS <-->|Secure API Calls| EXT2
+    SYS -->|Exported Insights| EXT3

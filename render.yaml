@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: docuverse-node
+    runtime: node
+    rootDir: backend
+    buildCommand: npm ci
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Set the rest in Render UI (secrets): MONGO_URI, JWT_SECRET, EMAIL_*, etc.
+
+  - type: web
+    name: docuverse-python
+    runtime: docker
+    rootDir: .
+    dockerfilePath: backend/beta/Dockerfile
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Set the rest in Render UI (secrets): GEMINI_API_KEY, EMAIL_*, BASE_URL, etc.
+
