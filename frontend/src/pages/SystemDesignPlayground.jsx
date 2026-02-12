@@ -82,9 +82,6 @@ const initialEdges = [
     }
 ];
 
-const webhookUrl = import.meta.env.VITE_N8N_WEBHOOK_URL || '';
-const webhookToken = import.meta.env.VITE_N8N_WEBHOOK_TOKEN || '';
-
 const SystemDesignPlayground = () => {
     const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
     const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -132,44 +129,9 @@ const SystemDesignPlayground = () => {
         ]);
     };
 
-    const callN8n = async (action) => {
-        if (!webhookUrl) {
-            setError('Missing n8n webhook URL. Set VITE_N8N_WEBHOOK_URL.');
-            return;
-        }
-        if (!prompt.trim()) {
-            setError('Write a prompt to guide the diagram.');
-            return;
-        }
-        setError('');
-        setLoading(true);
-        try {
-            const res = await fetch(webhookUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(webhookToken ? { Authorization: `Bearer ${webhookToken}` } : {})
-                },
-                body: JSON.stringify({
-                    action,
-                    prompt,
-                    nodes,
-                    edges
-                })
-            });
-            if (!res.ok) {
-                throw new Error(`Webhook failed (${res.status})`);
-            }
-            const data = await res.json();
-            if (Array.isArray(data.nodes)) setNodes(data.nodes);
-            if (Array.isArray(data.edges)) setEdges(data.edges);
-            setHistory((prev) => [{ prompt, action, ts: new Date().toISOString() }, ...prev].slice(0, 10));
-            setPrompt('');
-        } catch (err) {
-            setError(err.message || 'AI request failed.');
-        } finally {
-            setLoading(false);
-        }
+    const callAI = async (action) => {
+        // This playground functionality is currently disabled until refactored.
+        setError('AI design refinement is currently disabled.');
     };
 
     const exportSvg = async () => {
@@ -200,7 +162,7 @@ const SystemDesignPlayground = () => {
                     </h1>
                     <p className="text-[#b3bbc2] mt-6 max-w-2xl text-lg">
                         AutoSRS ships a focused playground for UML, sequence, and architecture flows.
-                        Design with the canvas, then let AI refine the graph.
+                        Design with the canvas, then manual edits are supported.
                     </p>
                     <div className="mt-8 flex flex-wrap gap-4">
                         <button
@@ -236,7 +198,7 @@ const SystemDesignPlayground = () => {
                                 </button>
                             ))}
                             <button
-                                onClick={() => setNodes([]) || setEdges([])}
+                                onClick={() => { setNodes([]); setEdges([]); }}
                                 className="mt-4 w-10 h-10 rounded-xl border border-[#2b3137] bg-[#11151c] hover:bg-[#1b1f23] transition flex items-center justify-center text-[#d97762]"
                                 title="Clear Canvas"
                             >
@@ -267,7 +229,7 @@ const SystemDesignPlayground = () => {
                         {panelOpen && (
                             <div className="w-[320px] border-l border-[#1f242b] bg-[#0f1318] p-5">
                                 <div className="flex items-center justify-between mb-4">
-                                    <div className="text-sm uppercase tracking-[0.2em] text-[#7fb3d4]">LLM Notebook</div>
+                                    <div className="text-sm uppercase tracking-[0.2em] text-[#7fb3d4]">Notebook</div>
                                     <button
                                         onClick={() => setPanelOpen(false)}
                                         className="text-[#8e98a0] hover:text-[#f5f1e8] transition"
@@ -288,14 +250,14 @@ const SystemDesignPlayground = () => {
                                 <div className="mt-4 grid grid-cols-2 gap-3">
                                     <button
                                         disabled={loading}
-                                        onClick={() => callN8n('generate')}
+                                        onClick={() => callAI('generate')}
                                         className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[#3a7ca5] text-[#0e1116] text-sm font-semibold hover:bg-[#2e6b90] transition disabled:opacity-60"
                                     >
                                         <Wand2 size={16} /> Generate
                                     </button>
                                     <button
                                         disabled={loading}
-                                        onClick={() => callN8n('edit')}
+                                        onClick={() => callAI('edit')}
                                         className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[#55b38b] text-[#0e1116] text-sm font-semibold hover:bg-[#4aa37d] transition disabled:opacity-60"
                                     >
                                         <Sparkles size={16} /> Refine
@@ -327,7 +289,7 @@ const SystemDesignPlayground = () => {
                             <button
                                 onClick={() => setPanelOpen(true)}
                                 className="absolute right-4 top-4 z-20 w-10 h-10 rounded-xl border border-[#2b3137] bg-[#11151c] hover:bg-[#1b1f23] transition flex items-center justify-center text-[#7fb3d4]"
-                                title="Open LLM Panel"
+                                title="Open Panel"
                             >
                                 <PanelRightOpen size={18} />
                             </button>
@@ -336,7 +298,7 @@ const SystemDesignPlayground = () => {
                 </div>
 
                 <div className="mt-6 text-xs text-[#6c7680] flex items-center gap-2">
-                    <Layers size={14} /> This playground supports AI-generated and hand-edited system diagrams.
+                    <Layers size={14} /> This playground supports hand-edited system diagrams.
                 </div>
             </div>
         </div>

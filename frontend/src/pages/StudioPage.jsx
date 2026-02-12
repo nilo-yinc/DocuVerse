@@ -98,12 +98,15 @@ const StudioPage = () => {
                     }
                 }
                 const derivedDocUrl = data.documentUrl || buildQuickDocUrl(data.title);
+                const normalizedDocUrl = (derivedDocUrl && derivedDocUrl.startsWith('/download_srs/'))
+                    ? `${nodeApiBase}${derivedDocUrl}`
+                    : derivedDocUrl;
                 setProject({
                     id: data._id,
                     name: data.title,
                     contentMarkdown: data.contentMarkdown || derivedMarkdown,
                     status: data.status || 'DRAFT',
-                    documentUrl: derivedDocUrl,
+                    documentUrl: normalizedDocUrl,
                     reviewFeedback: data.reviewFeedback || [],
                     workflowEvents: data.workflowEvents || [],
                     insights: data.insights || [],

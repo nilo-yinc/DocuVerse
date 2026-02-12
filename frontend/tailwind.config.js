@@ -7,6 +7,18 @@ export default {
   theme: {
     extend: {
       colors: {
+        brand: {
+          bg: '#0d1117',
+          darker: '#010409',
+          card: '#161b22',
+          border: '#30363d',
+          blue: '#58a6ff',
+          lightBlue: '#79c0ff',
+          green: '#238636',
+          lightGreen: '#7ee787',
+          text: '#c9d1d9',
+          muted: '#8b949e'
+        },
         neon: {
           blue: '#00f3ff',
           purple: '#bc13fe',
