@@ -70,8 +70,7 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
 
     const nodeApiBase = import.meta.env.VITE_NODE_API_URL
         || (typeof window !== 'undefined' ? `http://${window.location.hostname || 'localhost'}:5000` : 'http://localhost:5000');
-    const pythonApiBase = import.meta.env.VITE_PY_API_URL
-        || (typeof window !== 'undefined' ? `http://${window.location.hostname || 'localhost'}:8000` : 'http://localhost:8000');
+    const pythonApiBase = import.meta.env.VITE_PY_API_URL || nodeApiBase;
 
     // const emailLocked = Boolean(clientEmail) && workflowTimeline.some((event) => event.title?.toLowerCase().includes('review'));
     const hasUpdatedDoc = workflowTimeline.some((event) =>

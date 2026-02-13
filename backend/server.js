@@ -57,6 +57,7 @@ app.get('/download_srs/:filename', (req, res) => {
 app.use('/api/v1/users', require('./routes/user.routes'));
 app.use('/api/projects', require('./routes/projects'));
 app.use('/api/support', require('./routes/support'));
+app.use('/api', require('./routes/pythonProxy'));
 
 // Fallback explicit routes for password OTP (in case of router mismatch)
 const { requestPasswordOTP, verifyPasswordOTP } = require('./controllers/user.controller');

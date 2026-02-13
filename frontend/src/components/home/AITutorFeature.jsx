@@ -5,6 +5,7 @@ import axios from 'axios';
 import { CardContainer, CardBody, CardItem, CardSpotlight } from '../ui/Card3D';
 
 const AITutorFeature = () => {
+    const pyApiBase = import.meta.env.VITE_PY_API_URL || import.meta.env.VITE_NODE_API_URL || '';
     const [messages, setMessages] = useState([
         { role: 'ai', text: "Hello! I'm your Engineering Tutor. I can explain complex diagrams, review your requirements, or help you study for system design interviews. What shall we tackle?" }
     ]);
@@ -65,7 +66,7 @@ const AITutorFeature = () => {
     const refreshDiagramStatus = async () => {
         setDiagramStatusLoading(true);
         try {
-            const res = await axios.get('/api/notebook/diagram-image/status');
+            const res = await axios.get(`${pyApiBase}/api/notebook/diagram-image/status`);
             setDiagramEnabled(Boolean(res.data?.enabled));
             setDiagramReason(res.data?.reason || "");
             return Boolean(res.data?.enabled);
@@ -81,7 +82,7 @@ const AITutorFeature = () => {
     const refreshPhotoStatus = async () => {
         setPhotoStatusLoading(true);
         try {
-            const res = await axios.get('/api/notebook/image/status');
+            const res = await axios.get(`${pyApiBase}/api/notebook/image/status`);
             setPhotoEnabled(Boolean(res.data?.enabled));
             setPhotoReason(res.data?.reason || "");
             return Boolean(res.data?.enabled);
@@ -124,7 +125,7 @@ const AITutorFeature = () => {
         setIsTyping(true);
 
         try {
-            const res = await axios.post('/api/notebook/chat', {
+            const res = await axios.post(`${pyApiBase}/api/notebook/chat`, {
                 content: baseContext,
                 query: text,
                 history: messages
@@ -156,7 +157,7 @@ const AITutorFeature = () => {
         setImageLoading(true);
         setMessages(prev => [...prev, { role: 'user', text: `Generate image: ${text}` }]);
         try {
-            const endpoint = type === "diagram" ? '/api/notebook/diagram-image' : '/api/notebook/image';
+            const endpoint = type === "diagram" ? `${pyApiBase}/api/notebook/diagram-image` : `${pyApiBase}/api/notebook/image`;
             const res = await axios.post(endpoint, { prompt: text });
             if (res.data?.image) {
                 setMessages(prev => [...prev, { role: 'ai', type: 'image', imageUrl: res.data.image, text }]);

@@ -12,6 +12,28 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 // Generate short unique shareId
 const generateShareId = () => require('crypto').randomBytes(6).toString('hex');
 
+const normalizeUserScale = (rawScale, otherScale) => {
+    const candidates = [rawScale, otherScale].filter(Boolean).map(v => String(v).trim());
+    for (const value of candidates) {
+        const normalized = value.toLowerCase().replace(/[, ]+/g, '');
+        if (normalized.includes('<100') || normalized.includes('under100')) return '<100';
+        if (
+            normalized.includes('100-1k') ||
+            normalized.includes('100to1000') ||
+            normalized.includes('100-1000')
+        ) return '100-1k';
+        if (
+            normalized.includes('1k-100k') ||
+            normalized.includes('1000-10000') ||
+            normalized.includes('1000-100000') ||
+            normalized.includes('10000+') ||
+            normalized.includes('10k+')
+        ) return '1k-100k';
+        if (normalized.includes('>100k') || normalized.includes('100000+') || normalized.includes('100k+')) return '>100k';
+    }
+    return '100-1k';
+};
+
 const buildMarkdownFromSrsRequest = (srsRequest) => {
     if (!srsRequest) return "# System Requirements\n\nStart typing...";
     const pi = srsRequest.project_identity || {};
@@ -200,11 +222,10 @@ router.post('/enterprise/generate', isLoggedIn, async (req, res) => {
                 primary_user_flow: formData.userFlow || 'Standard user flow.'
             },
             non_functional_requirements: {
-                expected_user_scale: (safeUserScale === 'Other' && formData.userScale_other) ? formData.userScale_other :
-                                   safeUserScale === '< 100 Users' ? '<100' :
-                                   safeUserScale === '100 - 1,000 Users' ? '100-1k' :
-                                   safeUserScale === '1,000 - 10,000 Users' ? '1k-100k' : 
-                                   safeUserScale === '10,000+ Users' ? '>100k' : safeUserScale,
+                expected_user_scale: normalizeUserScale(
+                    safeUserScale,
+                    safeUserScale === 'Other' ? formData.userScale_other : ''
+                ),
                 performance_expectation: (safePerformance === 'Other' && formData.performance_other) ? formData.performance_other :
                                        safePerformance.includes('Standard') ? 'Normal' :
                                        safePerformance.includes('High') ? 'High' : 
