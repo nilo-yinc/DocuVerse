@@ -101,6 +101,18 @@ const ProjectSchema = new mongoose.Schema({
         type: String,
         enum: ['DRAFT', 'IN_REVIEW', 'APPROVED', 'CHANGES_REQUESTED'],
         default: 'DRAFT'
+    },
+    hq: {
+        status: {
+            type: String,
+            enum: ['IDLE', 'BUILDING', 'READY', 'APPLIED', 'FAILED'],
+            default: 'IDLE'
+        },
+        statusUrl: String,
+        downloadUrl: String,
+        message: String,
+        lastError: String,
+        lastCheckedAt: Date
     }
 }, { timestamps: true });
 

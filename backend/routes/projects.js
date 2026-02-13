@@ -97,6 +97,60 @@ const buildMarkdownFromSrsRequest = (srsRequest) => {
     return lines.join('\n');
 };
 
+const getPyBase = () => String(process.env.PY_API_BASE || 'http://127.0.0.1:8000').replace(/\/+$/, '');
+
+const toAbsolutePyUrl = (relativeOrAbsolute) => {
+    if (!relativeOrAbsolute) return null;
+    if (String(relativeOrAbsolute).startsWith('http')) return relativeOrAbsolute;
+    const pyBase = getPyBase();
+    return `${pyBase}${String(relativeOrAbsolute).startsWith('/') ? '' : '/'}${relativeOrAbsolute}`;
+};
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const callPythonWithRetry = async (requestFactory, retries = 2) => {
+    let lastError;
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+        try {
+            return await requestFactory();
+        } catch (error) {
+            lastError = error;
+            const status = error?.response?.status;
+            const retryable = [502, 503, 504].includes(status) || !status;
+            if (!retryable || attempt === retries) break;
+            await sleep(1500 * (attempt + 1));
+        }
+    }
+    throw lastError;
+};
+
+const applyDocFromPythonToProject = async (project, pyDownloadUrl) => {
+    const absolute = toAbsolutePyUrl(pyDownloadUrl);
+    if (!absolute) throw new Error('Invalid download URL from Python backend');
+    const filename = String(pyDownloadUrl || '').split('/download_srs/')[1] || '';
+    if (!filename) throw new Error('Python download_url missing filename');
+
+    const docxResp = await axios.get(absolute, { responseType: 'arraybuffer', timeout: 120000 });
+    const docxBuffer = Buffer.from(docxResp.data);
+
+    if (project.docxFileId) {
+        const expireAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        await markDocxExpireAt(project.docxFileId, expireAt);
+    }
+
+    const uploadedId = await uploadDocxBuffer({
+        filename,
+        buffer: docxBuffer,
+        metadata: { projectId: project._id.toString(), type: 'srs-docx' }
+    });
+
+    const nodePublicUrl = String(process.env.NODE_PUBLIC_URL || process.env.BACKEND_PUBLIC_URL || '').replace(/\/+$/, '');
+    project.docxFileId = uploadedId;
+    project.docxFilename = filename;
+    project.documentUrl = nodePublicUrl ? `${nodePublicUrl}/download_srs/${filename}` : `/download_srs/${filename}`;
+    project.reviewedDocumentUrl = undefined;
+};
+
 // @route   POST /api/projects/save
 // @desc    Create or Update a project
 // @access  Private
@@ -114,7 +168,8 @@ router.put('/:id', isLoggedIn, async (req, res) => {
             reviewFeedback,
             workflowEvents,
             insights,
-            clientEmail
+            clientEmail,
+            hq
         } = req.body;
         const project = await Project.findById(req.params.id);
         
@@ -130,6 +185,7 @@ router.put('/:id', isLoggedIn, async (req, res) => {
         if (workflowEvents !== undefined) project.workflowEvents = workflowEvents;
         if (insights !== undefined) project.insights = insights;
         if (clientEmail !== undefined) project.clientEmail = clientEmail;
+        if (hq !== undefined) project.hq = { ...(project.hq || {}), ...hq };
 
         await project.save();
         res.json(project);
@@ -355,33 +411,21 @@ router.post('/enterprise/generate', isLoggedIn, async (req, res) => {
             return res.status(500).json({ msg: 'Generation Engine Failed', details: 'Python did not return a valid download_url' });
         }
 
-        // 4a. Download DOCX bytes from Python and store ONLY the latest in MongoDB GridFS
-        const pythonDocUrl = pythonDownloadUrl.startsWith('http')
-            ? pythonDownloadUrl
-            : `${pyBase}${pythonDownloadUrl.startsWith('/') ? '' : '/'}${pythonDownloadUrl}`;
-        const docxResp = await axios.get(pythonDocUrl, { responseType: 'arraybuffer' });
-        const docxBuffer = Buffer.from(docxResp.data);
+        await applyDocFromPythonToProject(project, pythonDownloadUrl);
 
-        // keep old doc alive for 24 hours (so old email links still work),
-        // then MongoDB TTL will remove it automatically
-        if (project.docxFileId) {
-            const expireAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-            await markDocxExpireAt(project.docxFileId, expireAt);
-        }
-
-        const uploadedId = await uploadDocxBuffer({
-            filename,
-            buffer: docxBuffer,
-            metadata: { projectId: project._id.toString(), type: 'srs-docx' }
-        });
-
-        // 4b. Save document URL + initial requirements markdown to project
-        project.docxFileId = uploadedId;
-        project.docxFilename = filename;
-        // Node serves docx from GridFS at the same path prefix used previously by Python.
-        // In production (Vercel frontend + Render backend), store an absolute URL so "Open" works cross-domain.
-        const nodePublicUrl = String(process.env.NODE_PUBLIC_URL || process.env.BACKEND_PUBLIC_URL || '').replace(/\/+$/, '');
-        project.documentUrl = nodePublicUrl ? `${nodePublicUrl}/download_srs/${filename}` : `/download_srs/${filename}`;
+        const enhancedStatusUrl = pythonResponse.data?.enhanced_status_url || `/srs_status/${project._id.toString()}`;
+        const enhancedDownloadUrl = pythonResponse.data?.enhanced_download_url || null;
+        project.hq = {
+            ...(project.hq || {}),
+            status: mode === 'quick' ? 'BUILDING' : 'READY',
+            statusUrl: enhancedStatusUrl,
+            downloadUrl: enhancedDownloadUrl,
+            message: mode === 'quick'
+                ? 'HQ enhancement is building in background. Open Studio to track progress.'
+                : 'HQ document is ready.',
+            lastError: '',
+            lastCheckedAt: new Date()
+        };
         // keep only latest docx => don't point to a deleted previous file
         project.reviewedDocumentUrl = undefined;
         project.contentMarkdown = buildMarkdownFromSrsRequest(srsRequest);
@@ -393,7 +437,8 @@ router.post('/enterprise/generate', isLoggedIn, async (req, res) => {
             srs_document_path: project.documentUrl,
             projectId: project._id,
             mode: usedMode,
-            warning: modeFallbackWarning
+            warning: modeFallbackWarning,
+            hq: project.hq
         });
 
     } catch (err) {
@@ -410,6 +455,158 @@ router.post('/enterprise/generate', isLoggedIn, async (req, res) => {
             msg: 'Generation Engine Failed', 
             details: err.message,
             stack: process.env.NODE_ENV === 'development' ? err.stack : undefined 
+        });
+    }
+});
+
+// @route   GET /api/projects/:id/hq-status
+// @desc    Check background HQ status and auto-apply enhanced DOCX when ready
+// @access  Private
+router.get('/:id/hq-status', isLoggedIn, async (req, res) => {
+    try {
+        const project = await Project.findById(req.params.id);
+        if (!project) return res.status(404).json({ msg: 'Project not found' });
+        if (project.userId.toString() !== req.user.id) return res.status(401).json({ msg: 'Not authorized' });
+
+        const hq = project.hq || { status: 'IDLE' };
+        if (!hq.statusUrl) {
+            return res.json({ status: hq.status || 'IDLE', applied: false, documentUrl: project.documentUrl || null });
+        }
+
+        const pyStatusUrl = toAbsolutePyUrl(hq.statusUrl);
+        const pyRes = await callPythonWithRetry(
+            () => axios.get(pyStatusUrl, { timeout: 90000 }),
+            2
+        );
+        const pyStatus = pyRes.data || {};
+        const enhancedReady = Boolean(pyStatus.enhanced_ready || pyStatus.full_ready);
+        const bestDownload = pyStatus.enhanced_download_url || pyStatus.full_download_url || hq.downloadUrl;
+
+        project.hq.lastCheckedAt = new Date();
+
+        if (!enhancedReady || !bestDownload) {
+            project.hq.status = 'BUILDING';
+            project.hq.message = 'HQ is still generating in background.';
+            await project.save();
+            return res.json({ status: 'BUILDING', applied: false, documentUrl: project.documentUrl || null, hq: project.hq });
+        }
+
+        if (project.hq.status !== 'APPLIED') {
+            await applyDocFromPythonToProject(project, bestDownload);
+            project.hq.status = 'APPLIED';
+            project.hq.downloadUrl = bestDownload;
+            project.hq.message = 'HQ document ready and applied.';
+            project.workflowEvents = project.workflowEvents || [];
+            project.workflowEvents.push({
+                date: new Date().toISOString(),
+                title: 'HQ Ready',
+                description: 'Enhanced document generated in background and applied.',
+                status: project.status || 'DRAFT'
+            });
+            await project.save();
+        }
+
+        return res.json({
+            status: project.hq.status,
+            applied: project.hq.status === 'APPLIED',
+            documentUrl: project.documentUrl || null,
+            hq: project.hq
+        });
+    } catch (err) {
+        const status = err?.response?.status;
+        if ([502, 503, 504].includes(status)) {
+            return res.json({ status: 'BUILDING', applied: false, documentUrl: null, transient: true });
+        }
+        console.error('HQ status check failed:', err?.message || err);
+        try {
+            const project = await Project.findById(req.params.id);
+            if (project) {
+                project.hq = {
+                    ...(project.hq || {}),
+                    status: 'FAILED',
+                    message: 'HQ generation failed.',
+                    lastError: err?.message || 'Unknown error',
+                    lastCheckedAt: new Date()
+                };
+                await project.save();
+            }
+        } catch (_) {
+        }
+        res.status(500).json({ msg: 'HQ status check failed', detail: err?.message || 'Unknown error' });
+    }
+});
+
+// @route   POST /api/projects/:id/send-review
+// @desc    Sync project to Python and trigger workflow review email from server-side
+// @access  Private
+router.post('/:id/send-review', isLoggedIn, async (req, res) => {
+    try {
+        const project = await Project.findById(req.params.id);
+        if (!project) return res.status(404).json({ msg: 'Project not found' });
+        if (project.userId.toString() !== req.user.id) return res.status(401).json({ msg: 'Not authorized' });
+
+        const {
+            clientEmail,
+            documentLink,
+            senderEmail,
+            senderName,
+            projectName,
+            insights,
+            notes,
+            isUpdate = false,
+            isResend = false
+        } = req.body || {};
+
+        if (!clientEmail) return res.status(400).json({ msg: 'Client email is required' });
+
+        const pyBase = getPyBase();
+
+        await callPythonWithRetry(() => axios.post(`${pyBase}/api/project/create`, {
+            id: project._id.toString(),
+            name: project.title || projectName || 'DocuVerse Project',
+            content: project.contentMarkdown || buildMarkdownFromSrsRequest(project.enterpriseData || {}),
+            documentUrl: project.documentUrl || documentLink || undefined,
+            status: project.status || 'DRAFT',
+            reviewedDocumentUrl: project.reviewedDocumentUrl,
+            clientEmail: clientEmail,
+            workflowEvents: project.workflowEvents || [],
+            reviewFeedback: project.reviewFeedback || []
+        }, { timeout: 120000 }), 2);
+
+        const endpoint = isResend ? '/api/workflow/resend-review' : '/api/workflow/start-review';
+        const wfRes = await callPythonWithRetry(() => axios.post(`${pyBase}${endpoint}`, {
+            projectId: project._id.toString(),
+            clientEmail,
+            documentLink: project.documentUrl || documentLink || undefined,
+            senderEmail: senderEmail || req.user.email || undefined,
+            senderName: senderName || req.user.name || undefined,
+            projectName: projectName || project.title || undefined,
+            insights: insights || [],
+            notes: notes || project.contentMarkdown || '',
+            isUpdate
+        }, { timeout: 180000 }), 2);
+
+        project.clientEmail = clientEmail;
+        project.status = 'IN_REVIEW';
+        project.workflowEvents = project.workflowEvents || [];
+        project.workflowEvents.push({
+            date: new Date().toISOString(),
+            title: isResend ? 'Review Resent' : 'Review Sent',
+            description: `Document sent to ${clientEmail} for review.`,
+            status: 'IN_REVIEW'
+        });
+        await project.save();
+
+        res.json({
+            status: 'IN_REVIEW',
+            message: isResend ? 'Review resent successfully.' : 'Review sent successfully.',
+            warning: wfRes.data?.warning || null
+        });
+    } catch (err) {
+        console.error('Send review failed:', err?.response?.data || err?.message || err);
+        res.status(500).json({
+            msg: 'Failed to send review',
+            detail: err?.response?.data?.detail || err?.response?.data?.warning || err?.message || 'Unknown error'
         });
     }
 });

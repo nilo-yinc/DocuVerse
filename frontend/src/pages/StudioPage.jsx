@@ -111,7 +111,8 @@ const StudioPage = () => {
                     workflowEvents: data.workflowEvents || [],
                     insights: data.insights || [],
                     clientEmail: data.clientEmail || "",
-                    enterpriseFormData: data.enterpriseFormData || {}
+                    enterpriseFormData: data.enterpriseFormData || {},
+                    hq: data.hq || { status: 'IDLE' }
                 });
             } catch (error) {
                 console.error("Failed to load project", error);
@@ -137,14 +138,15 @@ const StudioPage = () => {
                     status: data.status,
                     reviewFeedback: data.reviewFeedback,
                     workflowEvents: data.workflowEvents,
-                    documentUrl: data.documentUrl || prev.documentUrl
+                    documentUrl: data.documentUrl || prev.documentUrl,
+                    hq: data.hq || prev.hq
                 }));
             } catch (error) {
                 console.error("Failed to refresh project", error);
             }
         }, 5000);
         return () => clearInterval(interval);
-    }, [project, id, token]);
+    }, [id, token]);
 
     if (loading) return (
         <div className="min-h-screen bg-[#0d1117] flex items-center justify-center text-[#8b949e]">
@@ -172,6 +174,11 @@ const StudioPage = () => {
                     </div>
                 </div>
                 <div className="flex gap-2">
+                    {(project.hq?.status === 'BUILDING') && (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-bold border bg-cyan-900/20 text-cyan-300 border-cyan-700">
+                            HQ BUILDING
+                        </span>
+                    )}
                     <span className={`px-2 py-0.5 rounded-full text-xs font-bold border 
                         ${project.status === 'APPROVED' ? 'bg-green-900/20 text-green-400 border-green-900' :
                             project.status === 'IN_REVIEW' ? 'bg-yellow-900/20 text-yellow-400 border-yellow-900' :
@@ -194,6 +201,7 @@ const StudioPage = () => {
                 reviewedDocumentUrl={project.reviewedDocumentUrl}
                 initialClientEmail={project.clientEmail}
                 enterpriseFormData={project.enterpriseFormData}
+                initialHq={project.hq}
             />
         </div>
     );

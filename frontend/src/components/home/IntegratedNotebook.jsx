@@ -20,7 +20,7 @@ const useDebounce = (value, delay) => {
     return debouncedValue;
 };
 
-const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUserEmail, initialStatus = "DRAFT", initialFeedback = [], workflowEvents = [], documentUrl, initialInsights = [], initialClientEmail = "", previewMode = false, enterpriseFormData = {} }) => {
+const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUserEmail, initialStatus = "DRAFT", initialFeedback = [], workflowEvents = [], documentUrl, initialInsights = [], initialClientEmail = "", previewMode = false, enterpriseFormData = {}, initialHq = null }) => {
     const navigate = useNavigate();
     useTitle(previewMode ? null : 'Interactive Studio');
     const { token, user } = useAuth();
@@ -40,6 +40,8 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
     const [workflowError, setWorkflowError] = useState("");
     const [workflowMessage, setWorkflowMessage] = useState("");
     const [workflowTimeline, setWorkflowTimeline] = useState(workflowEvents || []);
+    const [hq, setHq] = useState(initialHq || { status: 'IDLE' });
+    const [activeDocumentUrl, setActiveDocumentUrl] = useState(documentUrl || "");
 
     // --- Chat State ---
     const [chatMessages, setChatMessages] = useState([
@@ -143,38 +145,12 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
                 await axios.put(`${nodeApiBase}/api/projects/${projectId}`, { contentMarkdown: debouncedContent }, {
                     headers: token ? { Authorization: `Bearer ${token}` } : {}
                 });
-                await ensurePythonProject(debouncedContent);
             } catch (error) {
                 console.error("Auto-save failed", error);
             }
         };
         autoSave();
     }, [debouncedContent, projectId, nodeApiBase, token, previewMode]);
-
-    const ensurePythonProject = async (contentOverride, options = {}) => {
-        if (!projectId) return;
-        const workflowPayload = Array.isArray(options.workflowEvents) && options.workflowEvents.length > 0
-            ? options.workflowEvents
-            : undefined;
-        const feedbackPayload = Array.isArray(options.reviewFeedback) && options.reviewFeedback.length > 0
-            ? options.reviewFeedback
-            : undefined;
-        try {
-            await axios.post(`${pythonApiBase}/api/project/create`, {
-                id: projectId,
-                name: projectName || 'DocuVerse Project',
-                content: contentOverride ?? content ?? '',
-                documentUrl: documentUrl || undefined,
-                status: options.status ?? status,
-                reviewedDocumentUrl: options.reviewedDocumentUrl,
-                clientEmail: options.clientEmail,
-                workflowEvents: workflowPayload,
-                reviewFeedback: feedbackPayload
-            });
-        } catch (error) {
-            console.warn("Python project sync failed", error);
-        }
-    };
 
 
     const refreshChatDiagramStatus = async () => {
@@ -234,6 +210,14 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
         if (!projectId) return;
         setWorkflowTimeline(workflowEvents || []);
     }, [projectId, workflowEvents]);
+
+    useEffect(() => {
+        setHq(initialHq || { status: 'IDLE' });
+    }, [initialHq]);
+
+    useEffect(() => {
+        setActiveDocumentUrl(documentUrl || "");
+    }, [documentUrl]);
 
     const handleSendMessage = async () => {
         if (!chatInput.trim()) return;
@@ -334,6 +318,9 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
             });
             if (res.data?.contentMarkdown) {
                 setContent(res.data.contentMarkdown);
+                if (res.data?.documentUrl) {
+                    setActiveDocumentUrl(res.data.documentUrl);
+                }
                 await syncNodeProject({
                     contentMarkdown: res.data.contentMarkdown,
                     documentUrl: res.data.documentUrl
@@ -427,64 +414,47 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
         }
     };
 
-    const refreshPythonProject = async () => {
-        if (!projectId || projectId === 'demo') return;
+    const checkHqStatus = async () => {
+        if (!projectId || !token) return;
         try {
-            const res = await axios.get(`${pythonApiBase}/api/project/${projectId}`);
-            const data = res.data;
-            if (!data) return;
-
-            if (data.status && data.status !== status) setStatus(data.status);
-            if (data.reviewFeedback && Array.isArray(data.reviewFeedback) && data.reviewFeedback.length > 0) {
-                setFeedback(data.reviewFeedback);
+            const res = await axios.get(`${nodeApiBase}/api/projects/${projectId}/hq-status`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const data = res.data || {};
+            if (data.hq) {
+                setHq(data.hq);
+            } else if (data.status) {
+                setHq((prev) => ({ ...(prev || {}), status: data.status }));
             }
-            if (data.workflowEvents && Array.isArray(data.workflowEvents) && data.workflowEvents.length > (workflowTimeline?.length || 0)) {
-                setWorkflowTimeline(data.workflowEvents);
-            }
-            if (data.clientEmail && !clientEmail) setClientEmail(data.clientEmail);
-
-            if (token) {
-                const patchPayload = {};
-                if (data.status) patchPayload.status = data.status;
-                if (data.clientEmail) patchPayload.clientEmail = data.clientEmail;
-                if (data.reviewFeedback?.length > 0) patchPayload.reviewFeedback = data.reviewFeedback;
-                if (data.workflowEvents?.length > (workflowEvents?.length || 0)) {
-                    patchPayload.workflowEvents = data.workflowEvents;
-                }
-                if (Object.keys(patchPayload).length > 0) {
-                    await axios.put(`${nodeApiBase}/api/projects/${projectId}`, patchPayload, {
-                        headers: { Authorization: `Bearer ${token}` }
-                    });
-                }
+            if ((data.status === 'APPLIED' || data.status === 'READY') && data.documentUrl) {
+                setActiveDocumentUrl(data.documentUrl);
+                setWorkflowMessage('HQ ready. Latest document replaced with enhanced version.');
             }
         } catch (error) {
             if ([404, 502, 503, 504].includes(error?.response?.status)) return;
-            console.error("Failed to refresh project from Python:", error);
+            console.error("Failed to check HQ status:", error);
         }
     };
 
     useEffect(() => {
-        if (previewMode) return;
-        if (projectId && projectId !== 'demo') {
-            (async () => {
-                await ensurePythonProject(content, {
-                    status,
-                    clientEmail,
-                    workflowEvents: workflowTimeline,
-                    reviewFeedback: feedback
-                });
-                await refreshPythonProject();
-            })();
-        }
-    }, [projectId, projectName, documentUrl, previewMode]);
+        if (previewMode || !projectId || projectId === 'demo') return;
+        syncNodeProject({
+            status,
+            clientEmail,
+            workflowEvents: workflowTimeline,
+            reviewFeedback: feedback,
+            documentUrl: activeDocumentUrl || undefined,
+            hq
+        });
+    }, [projectId, previewMode, status, clientEmail, workflowTimeline, feedback, activeDocumentUrl, hq]);
 
     useEffect(() => {
-        if (previewMode || !projectId) return;
-        const interval = setInterval(() => {
-            refreshPythonProject();
-        }, 7000);
+        if (previewMode || !projectId || projectId === 'demo' || !token) return;
+        if ((hq?.status || 'IDLE') !== 'BUILDING') return;
+        checkHqStatus();
+        const interval = setInterval(checkHqStatus, 15000);
         return () => clearInterval(interval);
-    }, [projectId, previewMode]);
+    }, [previewMode, projectId, token, hq?.status]);
 
     const handleSendReview = async () => {
         if (!clientEmail || !projectId) {
@@ -495,30 +465,24 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
         setWorkflowError("");
         setWorkflowMessage("");
         try {
-            await ensurePythonProject(content, {
-                status: 'IN_REVIEW',
+            const wasInReview = workflowTimeline.some((e) =>
+                ['review sent', 'review resent', 'review started'].includes((e.title || '').toLowerCase())
+            );
+            const res = await axios.post(`${nodeApiBase}/api/projects/${projectId}/send-review`, {
                 clientEmail,
-                workflowEvents: workflowTimeline,
-                reviewFeedback: feedback
-            });
-
-            const endpoint = workflowTimeline.some(e => e.status === 'IN_REVIEW')
-                ? `${pythonApiBase}/api/workflow/resend-review`
-                : `${pythonApiBase}/api/workflow/start-review`;
-
-            const res = await axios.post(endpoint, {
-                projectId,
-                clientEmail,
-                documentLink: documentUrl || undefined,
+                documentLink: activeDocumentUrl || undefined,
                 senderEmail: currentUserEmail || user?.email || undefined,
                 senderName: user?.name || undefined,
                 projectName: projectName || undefined,
                 insights,
                 notes: content,
-                isUpdate: hasUpdatedDoc
+                isUpdate: hasUpdatedDoc,
+                isResend: wasInReview
+            }, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {}
             });
 
-            const eventTitle = hasUpdatedDoc ? "Updated Review Sent" : "Review Sent";
+            const eventTitle = wasInReview ? "Review Resent" : "Review Sent";
             const eventDesc = `Document sent to ${clientEmail} for review.`;
 
             const nextTimeline = [
@@ -536,7 +500,7 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
                 status: 'IN_REVIEW',
                 workflowEvents: nextTimeline,
                 reviewFeedback: feedback,
-                documentUrl,
+                documentUrl: activeDocumentUrl || undefined,
                 clientEmail
             });
             if (res.data?.warning) {
@@ -638,7 +602,7 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
                             </div>
                             <div className="flex gap-2">
                                 {loadingInsights && <span className="flex items-center gap-1 text-[#58a6ff] text-[10px] animate-pulse"><Sparkles size={10} /> Syncing AI...</span>}
-                                {documentUrl && <a href={documentUrl} className="flex items-center gap-1 text-[#238636] text-xs font-bold hover:underline" target="_blank" rel="noopener noreferrer"><Download size={12} /> View Report</a>}
+                                {activeDocumentUrl && <a href={activeDocumentUrl} className="flex items-center gap-1 text-[#238636] text-xs font-bold hover:underline" target="_blank" rel="noopener noreferrer"><Download size={12} /> View Report</a>}
                             </div>
                         </div>
                         <textarea value={content} onChange={(e) => setContent(e.target.value)} className="flex-1 bg-transparent text-[#c9d1d9] font-mono text-sm leading-relaxed outline-none resize-none p-6 selection:bg-[#58a6ff] selection:text-white" spellCheck="false" placeholder="Start typing your system requirements..." />
@@ -685,7 +649,25 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
                                     <div className="mb-6">
                                         <h3 className="text-[#58a6ff] text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-2"><Zap size={14} /> Automated Review Loop</h3>
                                         <p className="text-sm text-[#8b949e] mb-4">Send this document for client review using the internal workflow service.</p>
-                                        {documentUrl && <div className="mb-4 bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-xs text-[#8b949e] flex items-center justify-between"><span>Attached DOCX: {documentUrl}</span><a href={documentUrl} target="_blank" rel="noreferrer" className="text-[#79c0ff] hover:underline">Open</a></div>}
+                                        <div className="mb-4 flex flex-wrap items-center gap-2">
+                                            <span className="text-[11px] px-2 py-1 rounded-md border border-[#30363d] bg-[#0d1117] text-[#8b949e]">
+                                                HQ: {hq?.status || 'IDLE'}
+                                            </span>
+                                            {(hq?.status === 'BUILDING') && (
+                                                <button onClick={checkHqStatus} className="text-[11px] px-2 py-1 rounded-md border border-[#58a6ff]/40 text-[#79c0ff] hover:bg-[#58a6ff]/10 transition flex items-center gap-1">
+                                                    <RefreshCw size={11} /> Check HQ
+                                                </button>
+                                            )}
+                                            {(hq?.status === 'APPLIED' || hq?.status === 'READY') && (
+                                                <span className="text-[11px] px-2 py-1 rounded-md border border-[#238636]/50 text-[#3fb950] bg-[#238636]/10">
+                                                    HQ ready. Latest DOCX applied.
+                                                </span>
+                                            )}
+                                            {hq?.message && (
+                                                <span className="text-[11px] text-[#8b949e]">{hq.message}</span>
+                                            )}
+                                        </div>
+                                        {activeDocumentUrl && <div className="mb-4 bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-xs text-[#8b949e] flex items-center justify-between"><span>Attached DOCX: {activeDocumentUrl}</span><a href={activeDocumentUrl} target="_blank" rel="noreferrer" className="text-[#79c0ff] hover:underline">Open</a></div>}
                                         <div className="flex gap-2">
                                             <div className="relative flex-1">
                                                 <Mail className="absolute left-3 top-2.5 text-[#8b949e]" size={16} />

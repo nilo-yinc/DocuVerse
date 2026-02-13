@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -31,7 +31,11 @@ const EnterpriseGeneration = () => {
     const existingProjectId = isUpdateFlow
         ? (location.state?.projectId || formData?.projectId || queryProjectId || localStorage.getItem('autoSRS_activeProjectId') || null)
         : null;
-    const forceHQ = location.state?.forceHQ || false;
+    const nodeApiBase = useMemo(
+        () => import.meta.env.VITE_NODE_API_URL
+            || (typeof window !== 'undefined' ? `http://${window.location.hostname || 'localhost'}:5000` : 'http://localhost:5000'),
+        []
+    );
 
     // Primary Generation State (Quick Pass)
     const [status, setStatus] = useState('initializing');
@@ -83,8 +87,6 @@ const EnterpriseGeneration = () => {
                 }
             }
 
-            const nodeApiBase = import.meta.env.VITE_NODE_API_URL
-                || (typeof window !== 'undefined' ? `http://${window.location.hostname || 'localhost'}:5000` : 'http://localhost:5000');
             const genUrl = `${nodeApiBase}/api/projects/enterprise/generate`;
 
             // Call Node.js Backend for Persistence & Generation
@@ -130,6 +132,16 @@ const EnterpriseGeneration = () => {
                 setStatus('complete');
                 setProgress(100);
                 setMessage("Quick SRS Ready!");
+                if (data?.hq?.status === 'BUILDING') {
+                    setHqStatus('processing');
+                    setHqProgress(15);
+                    setHqMessage('HQ is building in background. You can open Studio now.');
+                } else if (data?.hq?.status === 'APPLIED' || data?.hq?.status === 'READY') {
+                    setHqStatus('complete');
+                    setHqProgress(100);
+                    setHqMessage('HQ document is ready.');
+                    setHqResult({ download_url: data.srs_document_path });
+                }
                 if (data.projectId) {
                     localStorage.setItem('autoSRS_activeProjectId', data.projectId);
                 }
@@ -151,12 +163,12 @@ const EnterpriseGeneration = () => {
             if (mode === 'quick') {
                 setError(err.message);
                 setStatus('error');
+                clearInterval(timerRef.current);
+                timerRef.current = null;
             } else {
                 setHqStatus('error');
                 setHqMessage(err.message);
             }
-            clearInterval(timerRef.current);
-            timerRef.current = null;
         }
     };
 
@@ -165,7 +177,7 @@ const EnterpriseGeneration = () => {
         if (!formData) return;
         if (!hasStartedRef.current) {
             hasStartedRef.current = true;
-            startGeneration(forceHQ ? 'full' : 'quick');
+            startGeneration('quick');
         }
 
         return () => {
@@ -177,6 +189,42 @@ const EnterpriseGeneration = () => {
     const handleDownload = (url) => {
         if (url) window.location.href = url;
     };
+
+    useEffect(() => {
+        if (!studioProjectId || hqStatus !== 'processing' || !resolvedToken) return;
+
+        const pollHq = async () => {
+            try {
+                const res = await fetch(`${nodeApiBase}/api/projects/${studioProjectId}/hq-status`, {
+                    headers: { Authorization: `Bearer ${resolvedToken}` }
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+
+                if (data.status === 'BUILDING') {
+                    setHqProgress((prev) => Math.min(90, prev + 10));
+                    setHqMessage(data?.hq?.message || 'HQ is still generating...');
+                    return;
+                }
+
+                if (data.status === 'APPLIED' || data.status === 'READY') {
+                    setHqStatus('complete');
+                    setHqProgress(100);
+                    setHqMessage('HQ ready and applied to this project.');
+                    if (data.documentUrl) {
+                        setHqResult({ download_url: data.documentUrl });
+                        setResult({ download_url: data.documentUrl });
+                    }
+                }
+            } catch {
+                // keep background polling
+            }
+        };
+
+        pollHq();
+        const interval = setInterval(pollHq, 15000);
+        return () => clearInterval(interval);
+    }, [studioProjectId, hqStatus, resolvedToken, nodeApiBase]);
 
     // --- Circular Physics ---
     const radius = 60;
@@ -288,10 +336,14 @@ const EnterpriseGeneration = () => {
                             {/* HQ Toggle / Download */}
                             {hqStatus === 'idle' && (
                                 <button
-                                    onClick={() => startGeneration('full')}
+                                    onClick={() => {
+                                        setHqStatus('processing');
+                                        setHqProgress(10);
+                                        setHqMessage("HQ build queued in background. Open Studio to continue.");
+                                    }}
                                     className="py-3 px-4 bg-[#58a6ff]/10 border-[#58a6ff]/30 hover:bg-[#58a6ff]/20 text-[#79c0ff] rounded-xl flex items-center justify-center gap-2 transition-all font-medium"
                                 >
-                                    <Sparkles size={16} /> Generate High Quality
+                                    <Sparkles size={16} /> Build HQ in Background
                                 </button>
                             )}
 
