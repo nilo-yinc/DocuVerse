@@ -16,6 +16,7 @@ import { CardContainer, CardBody, CardItem, CardSpotlight, NoiseBackground, Glow
 import { BackgroundRippleEffect } from '../components/ui/BackgroundRippleEffect';
 import CLIHeader from '../components/layout/CLIHeader';
 import SystemStatusFooter from '../components/layout/SystemStatusFooter';
+import { defaultNodeBase, normalizeApiBase } from '../utils/apiBase';
 
 const LANDING_INSIGHTS = [
     { title: "Scalability Alert", type: "Security", desc: "Consider rate limiting for the public API endpoints." },
@@ -33,7 +34,7 @@ const LandingPage = () => {
 
     const handleViewSample = () => {
         // Open the sample report from backend static file
-        const backendUrl = import.meta.env.VITE_NODE_API_URL || '';
+        const backendUrl = normalizeApiBase(import.meta.env.VITE_NODE_API_URL, defaultNodeBase());
         window.open(`${backendUrl}/static/sample_report.docx`, '_blank');
     };
 

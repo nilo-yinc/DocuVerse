@@ -6,6 +6,7 @@ import { Building2, GraduationCap, User, FileText, Sparkles, Clock, ChevronRight
 import Logo from '../components/ui/Logo';
 import ProfileSettings from './ProfileSettings';
 import axios from 'axios';
+import { defaultNodeBase, normalizeApiBase } from '../utils/apiBase';
 
 import useTitle from '../hooks/useTitle';
 
@@ -24,8 +25,7 @@ const Dashboard = () => {
                     setProjects([]);
                     return;
                 }
-                const nodeApiBase = import.meta.env.VITE_NODE_API_URL
-                    || (typeof window !== 'undefined' ? `http://${window.location.hostname || 'localhost'}:5000` : 'http://localhost:5000');
+                const nodeApiBase = normalizeApiBase(import.meta.env.VITE_NODE_API_URL, defaultNodeBase());
                 const res = await axios.get(`${nodeApiBase}/api/projects`, {
                     headers: {
                         Authorization: `Bearer ${token}`
@@ -49,8 +49,7 @@ const Dashboard = () => {
         const confirmDelete = window.confirm("Delete this project? This cannot be undone.");
         if (!confirmDelete) return;
         try {
-            const nodeApiBase = import.meta.env.VITE_NODE_API_URL
-                || (typeof window !== 'undefined' ? `http://${window.location.hostname || 'localhost'}:5000` : 'http://localhost:5000');
+            const nodeApiBase = normalizeApiBase(import.meta.env.VITE_NODE_API_URL, defaultNodeBase());
             await axios.delete(`${nodeApiBase}/api/projects/${projectId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });

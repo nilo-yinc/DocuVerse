@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import Logo from '../components/ui/Logo';
 import { useAuth } from '../context/AuthContext';
+import { defaultNodeBase, normalizeApiBase } from '../utils/apiBase';
 
 // --- Utility: Project Key Generation ---
 const getProjectKey = (name) => {
@@ -32,8 +33,7 @@ const EnterpriseGeneration = () => {
         ? (location.state?.projectId || formData?.projectId || queryProjectId || localStorage.getItem('autoSRS_activeProjectId') || null)
         : null;
     const nodeApiBase = useMemo(
-        () => import.meta.env.VITE_NODE_API_URL
-            || (typeof window !== 'undefined' ? `http://${window.location.hostname || 'localhost'}:5000` : 'http://localhost:5000'),
+        () => normalizeApiBase(import.meta.env.VITE_NODE_API_URL, defaultNodeBase()),
         []
     );
 
@@ -122,7 +122,11 @@ const EnterpriseGeneration = () => {
                 const detailText = typeof data?.details === 'string'
                     ? data.details
                     : (data?.details ? JSON.stringify(data.details) : '');
-                const errMessage = detailText || data?.detail || data?.msg || rawText || "Generation backend failed";
+                const combined = detailText || data?.detail || data?.msg || rawText || "Generation backend failed";
+                const htmlLike = /<!doctype html>|<html|<head|<body/i.test(String(combined));
+                const errMessage = htmlLike
+                    ? "Backend returned HTML instead of API JSON. Check VITE_NODE_API_URL and Render service URL."
+                    : String(combined).slice(0, 400);
                 throw new Error(errMessage);
             }
 

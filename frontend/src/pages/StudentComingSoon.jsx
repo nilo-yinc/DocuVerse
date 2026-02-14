@@ -5,6 +5,7 @@ import { Sparkles, Stars, CalendarClock, Rocket, MessageSquare, Send, CheckCircl
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import Logo from '../components/ui/Logo';
+import { defaultNodeBase, normalizeApiBase } from '../utils/apiBase';
 
 const StudentComingSoon = () => {
     const navigate = useNavigate();
@@ -14,7 +15,7 @@ const StudentComingSoon = () => {
     const [submitStatus, setSubmitStatus] = useState(null); // 'success' | 'error' | null
     const [showForm, setShowForm] = useState(false);
 
-    const nodeApiBase = import.meta.env.VITE_NODE_API_URL || 'http://localhost:5000';
+    const nodeApiBase = normalizeApiBase(import.meta.env.VITE_NODE_API_URL, defaultNodeBase());
 
     const handleSuggest = async (e) => {
         e.preventDefault();

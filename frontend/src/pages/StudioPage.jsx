@@ -4,6 +4,7 @@ import axios from 'axios';
 import IntegratedNotebook from '../components/home/IntegratedNotebook';
 import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { defaultNodeBase, normalizeApiBase } from '../utils/apiBase';
 
 const buildMarkdownFromEnterpriseData = (enterpriseData) => {
     if (!enterpriseData) return "# New Project\n\nNo content yet.";
@@ -81,8 +82,7 @@ const StudioPage = () => {
             }
 
             try {
-                const nodeApiBase = import.meta.env.VITE_NODE_API_URL
-                    || (typeof window !== 'undefined' ? `http://${window.location.hostname || 'localhost'}:5000` : 'http://localhost:5000');
+                const nodeApiBase = normalizeApiBase(import.meta.env.VITE_NODE_API_URL, defaultNodeBase());
                 const res = await axios.get(`${nodeApiBase}/api/projects/${id}`, {
                     headers: token ? { Authorization: `Bearer ${token}` } : {}
                 });
@@ -127,8 +127,7 @@ const StudioPage = () => {
         if (!project || !id) return;
         const interval = setInterval(async () => {
             try {
-                const nodeApiBase = import.meta.env.VITE_NODE_API_URL
-                    || (typeof window !== 'undefined' ? `http://${window.location.hostname || 'localhost'}:5000` : 'http://localhost:5000');
+                const nodeApiBase = normalizeApiBase(import.meta.env.VITE_NODE_API_URL, defaultNodeBase());
                 const res = await axios.get(`${nodeApiBase}/api/projects/${id}`, {
                     headers: token ? { Authorization: `Bearer ${token}` } : {}
                 });

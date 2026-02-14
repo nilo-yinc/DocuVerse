@@ -3,9 +3,13 @@ import { motion } from 'framer-motion';
 import { Bot, User, Send, GraduationCap, Maximize2, Minimize2, Image as ImageIcon, Paperclip, RefreshCw } from 'lucide-react';
 import axios from 'axios';
 import { CardContainer, CardBody, CardItem, CardSpotlight } from '../ui/Card3D';
+import { defaultNodeBase, normalizeApiBase } from '../../utils/apiBase';
 
 const AITutorFeature = () => {
-    const pyApiBase = import.meta.env.VITE_PY_API_URL || import.meta.env.VITE_NODE_API_URL || '';
+    const pyApiBase = normalizeApiBase(
+        import.meta.env.VITE_PY_API_URL,
+        normalizeApiBase(import.meta.env.VITE_NODE_API_URL, defaultNodeBase())
+    );
     const [messages, setMessages] = useState([
         { role: 'ai', text: "Hello! I'm your Engineering Tutor. I can explain complex diagrams, review your requirements, or help you study for system design interviews. What shall we tackle?" }
     ]);

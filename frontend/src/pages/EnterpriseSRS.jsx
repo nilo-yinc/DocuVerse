@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { defaultNodeBase, normalizeApiBase } from '../utils/apiBase';
 
 // --- Utility ---
 function cn(...inputs) {
@@ -169,8 +170,7 @@ const EnterpriseSRS = () => {
             if (pId) {
                 setProjectId(pId);
                 try {
-                    const nodeApiBase = import.meta.env.VITE_NODE_API_URL
-                        || (typeof window !== 'undefined' ? `http://${window.location.hostname || 'localhost'}:5000` : 'http://localhost:5000');
+                    const nodeApiBase = normalizeApiBase(import.meta.env.VITE_NODE_API_URL, defaultNodeBase());
                     const authToken = token || localStorage.getItem('token');
                     const res = await axios.get(`${nodeApiBase}/api/projects/${pId}`, {
                         headers: authToken ? { Authorization: `Bearer ${authToken}` } : {}

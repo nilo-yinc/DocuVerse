@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, BrainCircuit, FileText, MessageSquare, ChevronRight, Zap, X, Send, Bot, User } from 'lucide-react';
 import axios from 'axios';
+import { defaultNodeBase, normalizeApiBase } from '../../utils/apiBase';
 
 // Debounce Utility
 const useDebounce = (value, delay) => {
@@ -16,7 +17,10 @@ const useDebounce = (value, delay) => {
 };
 
 const NotebookFeature = () => {
-    const pyApiBase = import.meta.env.VITE_PY_API_URL || import.meta.env.VITE_NODE_API_URL || '';
+    const pyApiBase = normalizeApiBase(
+        import.meta.env.VITE_PY_API_URL,
+        normalizeApiBase(import.meta.env.VITE_NODE_API_URL, defaultNodeBase())
+    );
     const [content, setContent] = useState(
         "# E-Commerce System Requirements\n\n1. User Authentication\n   - Users must be able to log in via Email/Password and OAuth (Google).\n   - JWT tokens should be used for session management.\n\n2. Product Catalog\n   - The system must support searching and filtering by category, price, and rating.\n   - Images should be stored in an S3 bucket.\n\n3. Order Processing\n   - Payments will be handled via Stripe API."
     );
