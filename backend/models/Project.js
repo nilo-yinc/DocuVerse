@@ -64,9 +64,9 @@ const ProjectSchema = new mongoose.Schema({
         type: String,
         required: false
     },
-    // Latest generated DOCX stored in MongoDB GridFS (only latest kept)
-    docxFileId: {
-        type: mongoose.Schema.Types.ObjectId,
+    // DOCX binary stored directly (always < 16 MB)
+    docxBuffer: {
+        type: Buffer,
         required: false
     },
     docxFilename: {
@@ -114,6 +114,20 @@ const ProjectSchema = new mongoose.Schema({
         lastError: String,
         lastCheckedAt: Date
     }
-}, { timestamps: true });
+}, {
+    timestamps: true,
+    toJSON: {
+        transform(doc, ret) {
+            delete ret.docxBuffer; // never send binary to API consumers
+            return ret;
+        }
+    },
+    toObject: {
+        transform(doc, ret) {
+            delete ret.docxBuffer;
+            return ret;
+        }
+    }
+});
 
 module.exports = mongoose.model('Project', ProjectSchema);

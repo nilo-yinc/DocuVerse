@@ -4,6 +4,7 @@ const cookieParser = require('cookie-parser');
 const path = require('path');
 require('dotenv').config({ path: process.env.DOTENV_PATH || path.resolve(__dirname, '../.env') });
 const { streamDocxByFilename } = require('./utils/docxGridfs');
+const Project = require('./models/Project');
 
 // Connect to DB using the package's config
 require('./config/mongoose-connection');
@@ -42,11 +43,19 @@ app.use(cookieParser());
 // Serve static files from the beta folder (e.g., sample documents)
 app.use('/static', express.static(path.join(__dirname, 'beta/static')));
 
-// Public DOCX downloads (served from MongoDB GridFS)
-// Keeps the same URL prefix the Python backend used: /download_srs/<filename>
-app.get('/download_srs/:filename', (req, res) => {
+// Public DOCX downloads – served from Project.docxBuffer (direct storage)
+// Falls back to GridFS for any legacy docs still stored there
+app.get('/download_srs/:filename', async (req, res) => {
     try {
-        streamDocxByFilename(res, req.params.filename);
+        const filename = req.params.filename;
+        const project = await Project.findOne({ docxFilename: filename }).select('docxBuffer docxFilename');
+        if (project && project.docxBuffer) {
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+            return res.send(project.docxBuffer);
+        }
+        // Fallback to GridFS for older documents
+        streamDocxByFilename(res, filename);
     } catch (err) {
         console.error('DOCX download error:', err?.message || err);
         res.status(500).send('DOCX download failed');

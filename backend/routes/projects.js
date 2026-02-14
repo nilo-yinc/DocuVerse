@@ -7,7 +7,6 @@ const dns = require('dns');
 dns.setDefaultResultOrder('ipv4first'); // Force IPv4 - Render blocks IPv6 to Gmail
 const nodemailer = require('nodemailer');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
-const { deleteDocxById, markDocxExpireAt, uploadDocxBuffer } = require('../utils/docxGridfs');
 
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -165,7 +164,8 @@ const sendReviewEmailDirectFromNode = async ({
     senderName,
     senderEmail,
     documentLink,
-    projectName
+    projectName,
+    docxBuffer
 }) => {
     const user = String(process.env.EMAIL_USER || '').trim();
     const pass = String(process.env.EMAIL_PASS || '').trim();
@@ -199,20 +199,14 @@ const sendReviewEmailDirectFromNode = async ({
 
     const absoluteDocLink = toAbsoluteNodeDocLink(documentLink);
     const attachments = [];
-    if (absoluteDocLink) {
-        try {
-            const resp = await axios.get(absoluteDocLink, {
-                responseType: 'arraybuffer',
-                timeout: 120000
-            });
-            attachments.push({
-                filename: extractFilenameFromLink(absoluteDocLink),
-                content: Buffer.from(resp.data),
-                contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-            });
-        } catch (err) {
-            console.warn('Direct email fallback: attachment fetch failed, sending link-only email.', err?.message || err);
-        }
+
+    // Attach DOCX directly from buffer (no HTTP download needed)
+    if (docxBuffer && docxBuffer.length > 0) {
+        attachments.push({
+            filename: extractFilenameFromLink(absoluteDocLink) || 'SRS_Document.docx',
+            content: docxBuffer,
+            contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        });
     }
 
     const safeSenderName = senderName || 'DocuVerse User';
@@ -247,19 +241,9 @@ const applyDocFromPythonToProject = async (project, pyDownloadUrl) => {
     const docxResp = await axios.get(absolute, { responseType: 'arraybuffer', timeout: 120000 });
     const docxBuffer = Buffer.from(docxResp.data);
 
-    if (project.docxFileId) {
-        const expireAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-        await markDocxExpireAt(project.docxFileId, expireAt);
-    }
-
-    const uploadedId = await uploadDocxBuffer({
-        filename,
-        buffer: docxBuffer,
-        metadata: { projectId: project._id.toString(), type: 'srs-docx' }
-    });
-
+    // Store DOCX directly on the project document (always < 16 MB)
     const nodePublicUrl = String(process.env.NODE_PUBLIC_URL || process.env.BACKEND_PUBLIC_URL || '').replace(/\/+$/, '');
-    project.docxFileId = uploadedId;
+    project.docxBuffer = docxBuffer;
     project.docxFilename = filename;
     project.documentUrl = nodePublicUrl ? `${nodePublicUrl}/download_srs/${filename}` : `/download_srs/${filename}`;
     project.reviewedDocumentUrl = undefined;
@@ -706,7 +690,8 @@ router.post('/:id/send-review', isLoggedIn, async (req, res) => {
             senderName: finalSenderName,
             senderEmail: finalSenderEmail,
             documentLink: finalDocumentLink,
-            projectName: finalProjectName
+            projectName: finalProjectName,
+            docxBuffer: project.docxBuffer || null
         });
 
         // Update project status
@@ -818,9 +803,6 @@ router.delete('/:id', isLoggedIn, async (req, res) => {
         if (!project) return res.status(404).json({ msg: 'Project not found' });
         if (project.userId.toString() !== req.user.id) return res.status(401).json({ msg: 'Not authorized' });
 
-        if (project.docxFileId) {
-            await deleteDocxById(project.docxFileId);
-        }
         await project.deleteOne();
         res.json({ success: true });
     } catch (err) {
