@@ -3,9 +3,7 @@ const router = express.Router();
 const isLoggedIn = require('../middlewares/isLoggedIn.middleware');
 const Project = require('../models/Project');
 const axios = require('axios');
-const dns = require('dns');
-dns.setDefaultResultOrder('ipv4first'); // Force IPv4 - Render blocks IPv6 to Gmail
-const nodemailer = require('nodemailer');
+// Brevo HTTP API for sending emails (Render blocks SMTP)
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 // Initialize Gemini
@@ -167,51 +165,17 @@ const sendReviewEmailDirectFromNode = async ({
     projectName,
     docxBuffer
 }) => {
-    const user = String(process.env.EMAIL_USER || '').trim();
-    const pass = String(process.env.EMAIL_PASS || '').trim();
-    const fromSender = String(process.env.SENDER_EMAIL || user || '').trim();
+    const apiKey = process.env.BREVO_API_KEY;
+    if (!apiKey) throw new Error('BREVO_API_KEY is not set');
 
-    if (!user || !pass || !fromSender) {
-        throw new Error('Node SMTP config missing (EMAIL_USER/EMAIL_PASS/SENDER_EMAIL).');
-    }
-
-    // Pre-resolve smtp.gmail.com to IPv4 — Render blocks IPv6
-    let smtpHost;
-    try {
-        const addrs = await new Promise((resolve, reject) =>
-            require('dns').resolve4('smtp.gmail.com', (err, a) => err ? reject(err) : resolve(a))
-        );
-        smtpHost = addrs[0];
-    } catch (_) {
-        smtpHost = '142.250.115.109'; // Gmail SMTP IPv4 fallback
-    }
-
-    const transporter = nodemailer.createTransport({
-        host: smtpHost,          // Raw IPv4 IP — no DNS
-        port: 465,
-        secure: true,
-        auth: { user, pass },
-        tls: { rejectUnauthorized: false, servername: 'smtp.gmail.com' },
-        connectionTimeout: 15000,
-        greetingTimeout: 15000,
-        socketTimeout: 30000,
-    });
+    const fromSender = String(process.env.SENDER_EMAIL || process.env.EMAIL_USER || '').trim();
+    if (!fromSender) throw new Error('SENDER_EMAIL is not set');
 
     const absoluteDocLink = toAbsoluteNodeDocLink(documentLink);
-    const attachments = [];
-
-    // Attach DOCX directly from buffer (no HTTP download needed)
-    if (docxBuffer && docxBuffer.length > 0) {
-        attachments.push({
-            filename: extractFilenameFromLink(absoluteDocLink) || 'SRS_Document.docx',
-            content: docxBuffer,
-            contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        });
-    }
-
     const safeSenderName = senderName || 'DocuVerse User';
     const safeProjectName = projectName || 'DocuVerse Project';
-    const html = `
+
+    const htmlContent = `
       <div style="font-family:Arial,sans-serif;color:#111">
         <h2>DocuVerse Review Request</h2>
         <p><strong>Project:</strong> ${safeProjectName}</p>
@@ -221,15 +185,42 @@ const sendReviewEmailDirectFromNode = async ({
       </div>
     `;
 
-    await transporter.sendMail({
-        from: `DocuVerse <${fromSender}>`,
-        to: toEmail,
-        replyTo: senderEmail || undefined,
+    const body = {
+        sender: { name: 'DocuVerse', email: fromSender },
+        to: [{ email: toEmail }],
+        replyTo: senderEmail ? { email: senderEmail } : undefined,
         subject,
-        text: `DocuVerse review request for ${safeProjectName}. Document: ${absoluteDocLink}`,
-        html,
-        attachments
+        htmlContent,
+        textContent: `DocuVerse review request for ${safeProjectName}. Document: ${absoluteDocLink}`,
+    };
+
+    // Attach DOCX directly from buffer (base64 for Brevo)
+    if (docxBuffer && docxBuffer.length > 0) {
+        body.attachment = [{
+            name: extractFilenameFromLink(absoluteDocLink) || 'SRS_Document.docx',
+            content: Buffer.isBuffer(docxBuffer)
+                ? docxBuffer.toString('base64')
+                : docxBuffer
+        }];
+    }
+
+    const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+            'api-key': apiKey,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        },
+        body: JSON.stringify(body)
     });
+
+    if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(`Brevo API error ${resp.status}: ${errText}`);
+    }
+
+    const result = await resp.json();
+    console.log('Review email sent via Brevo:', result.messageId || JSON.stringify(result));
 };
 
 const applyDocFromPythonToProject = async (project, pyDownloadUrl) => {

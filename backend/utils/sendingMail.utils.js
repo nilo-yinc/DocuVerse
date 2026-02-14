@@ -1,52 +1,62 @@
-// email sending using nodemailer
-const dns = require("dns");
-const { promisify } = require("util");
-const nodemailer = require("nodemailer");
+// Email sending via Brevo HTTP API (replaces nodemailer SMTP — Render blocks SMTP)
+const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 
-const resolve4 = promisify(dns.resolve4);
+/**
+ * Send an email via Brevo's transactional HTTP API.
+ * Uses fetch() over HTTPS — works on every hosting platform.
+ */
+const sendViaBrev = async ({ from, fromName, to, subject, html, text, attachments }) => {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) throw new Error("BREVO_API_KEY is not set");
 
-// Resolve smtp.gmail.com to IPv4 once and cache it
-let _cachedGmailIPv4 = null;
-const getGmailIPv4 = async () => {
-  if (_cachedGmailIPv4) return _cachedGmailIPv4;
-  try {
-    const addresses = await resolve4("smtp.gmail.com");
-    _cachedGmailIPv4 = addresses[0];
-    console.log("Resolved smtp.gmail.com to IPv4:", _cachedGmailIPv4);
-    return _cachedGmailIPv4;
-  } catch (err) {
-    console.error("Failed to resolve smtp.gmail.com IPv4, using fallback:", err.message);
-    return "142.250.115.109"; // well-known Gmail SMTP IPv4 fallback
+  const senderEmail = from || process.env.SENDER_EMAIL || process.env.EMAIL_USER;
+  const senderName = fromName || "DocuVerse";
+
+  const body = {
+    sender: { name: senderName, email: senderEmail },
+    to: [{ email: to }],
+    subject,
+    htmlContent: html || undefined,
+    textContent: text || undefined,
+  };
+
+  // Brevo attachments: [{ name, content (base64) }]
+  if (attachments && attachments.length > 0) {
+    body.attachment = attachments.map((a) => ({
+      name: a.filename || "document.docx",
+      content: Buffer.isBuffer(a.content)
+        ? a.content.toString("base64")
+        : a.content,
+    }));
   }
-};
 
-const buildTransporter = async () => {
-  const ipv4Host = await getGmailIPv4();
-
-  return nodemailer.createTransport({
-    host: ipv4Host,            // Raw IPv4 IP — no DNS lookup needed
-    port: 465,
-    secure: true,
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
+  const resp = await fetch(BREVO_API_URL, {
+    method: "POST",
+    headers: {
+      "api-key": apiKey,
+      "Content-Type": "application/json",
+      Accept: "application/json",
     },
-    tls: {
-      rejectUnauthorized: false,
-      servername: "smtp.gmail.com",  // SNI for TLS handshake with IP host
-    },
-    connectionTimeout: 15000,
-    greetingTimeout: 15000,
-    socketTimeout: 30000,
+    body: JSON.stringify(body),
   });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`Brevo API error ${resp.status}: ${errText}`);
+  }
+
+  const result = await resp.json();
+  console.log("Brevo email sent:", result.messageId || JSON.stringify(result));
+  return result;
 };
+
+// ─── HTML helpers ───────────────────────────────────────────────────
 
 const buildDocuVerseHeaderHtml = (subtitle = "") => {
   const subtitleHtml = subtitle
     ? `<p style="margin:6px 0 0 0; color:#8b949e; font-size:12px;">${subtitle}</p>`
     : "";
 
-  // Email-safe layout: tables + inline styles (avoid SVG; keep it simple for Gmail)
   return `
     <div style="background:#0d1117; border:1px solid #30363d; border-radius:10px; padding:16px 18px;">
       <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
@@ -72,31 +82,21 @@ const buildDocuVerseHeaderHtml = (subtitle = "") => {
 const buildDocuVerseFooterHtml = () => {
   return `
     <div style="margin-top:18px; color:#6e7781; font-size:12px; font-family:Arial, sans-serif;">
-      This email was sent by DocuVerse. If you didn’t request this, you can ignore it.
+      This email was sent by DocuVerse. If you didn't request this, you can ignore it.
     </div>
   `;
 };
 
+// ─── Public email functions ─────────────────────────────────────────
+
 const sendVerificationEmail = async (email, token) => {
   try {
-
-    // create email transporter
-    const transporter = await buildTransporter();
-
-    // verification URL
     const verificationUrl = `${process.env.BASE_URL}/api/v1/users/verify/${token}`;
 
-    // email content
-    const mailOptions = {
-      from: `"DocuVerse" <${process.env.SENDER_EMAIL}>`,
+    await sendViaBrev({
       to: email,
       subject: "Please verify your email address",
-      text: `
-        Thank you for registering! Please verify your email address to complete your registration.
-        ${verificationUrl}
-        This verification link will expire in 10 mins.
-        If you did not create an account, please ignore this email.
-      `,
+      text: `Thank you for registering! Please verify your email address: ${verificationUrl}\nThis link expires in 10 minutes.`,
       html: `
         <div style="font-family:Arial, sans-serif; line-height:1.6; color:#111;">
           ${buildDocuVerseHeaderHtml("Account verification")}
@@ -111,12 +111,10 @@ const sendVerificationEmail = async (email, token) => {
             ${buildDocuVerseFooterHtml()}
           </div>
         </div>
-      `
-    };
+      `,
+    });
 
-    // send email
-    const info = await transporter.sendMail(mailOptions);
-    console.log("Verification email sent: %s ", info.messageId);
+    console.log("Verification email sent to:", email);
     return true;
   } catch (error) {
     console.error("Error sending verification email:", error);
@@ -126,9 +124,8 @@ const sendVerificationEmail = async (email, token) => {
 
 const sendPasswordOTP = async (email, otp) => {
   try {
-    const transporter = await buildTransporter();
-    const mailOptions = {
-      from: `"DocuVerse Security" <${process.env.SENDER_EMAIL}>`,
+    await sendViaBrev({
+      fromName: "DocuVerse Security",
       to: email,
       subject: "Your password verification code",
       text: `Your verification code is ${otp}. It expires in 10 minutes.`,
@@ -145,10 +142,10 @@ const sendPasswordOTP = async (email, otp) => {
             ${buildDocuVerseFooterHtml()}
           </div>
         </div>
-      `
-    };
-    const info = await transporter.sendMail(mailOptions);
-    console.log("Password OTP sent: %s ", info.messageId);
+      `,
+    });
+
+    console.log("Password OTP sent to:", email);
     return true;
   } catch (error) {
     console.error("Error sending password OTP:", error);
@@ -158,27 +155,14 @@ const sendPasswordOTP = async (email, otp) => {
 
 const sendSuggestionAcknowledgement = async ({ email, name, title, priority }) => {
   try {
-    const transporter = await buildTransporter();
     const safeName = name || "there";
     const safeTitle = title || "your idea";
     const safePriority = priority || "Medium";
 
-    const mailOptions = {
-      from: `"DocuVerse" <${process.env.SENDER_EMAIL}>`,
+    await sendViaBrev({
       to: email,
       subject: "Thank you for your suggestion",
-      text: `Hi ${safeName},
-
-Thank you for sharing your suggestion with DocuVerse.
-
-Suggestion: ${safeTitle}
-Priority: ${safePriority}
-
-We received it successfully and our team will review it soon.
-We appreciate your feedback and support.
-
-Regards,
-DocuVerse Team`,
+      text: `Hi ${safeName},\n\nThank you for sharing your suggestion with DocuVerse.\n\nSuggestion: ${safeTitle}\nPriority: ${safePriority}\n\nWe received it successfully and our team will review it soon.\n\nRegards,\nDocuVerse Team`,
       html: `
         <div style="font-family: Arial, sans-serif; line-height:1.6; color:#111;">
           ${buildDocuVerseHeaderHtml("Feature suggestion received")}
@@ -194,10 +178,9 @@ DocuVerse Team`,
           </div>
         </div>
       `,
-    };
+    });
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log("Suggestion acknowledgement sent: %s", info.messageId);
+    console.log("Suggestion acknowledgement sent to:", email);
     return true;
   } catch (error) {
     console.error("Error sending suggestion acknowledgement:", error);
