@@ -163,7 +163,9 @@ const sendReviewEmailDirectFromNode = async ({
     senderEmail,
     documentLink,
     projectName,
-    docxBuffer
+    docxBuffer,
+    notes,
+    isResend
 }) => {
     const gatewayUrl = process.env.GMAIL_APPS_SCRIPT_URL;
     const token = process.env.GMAIL_APPS_SCRIPT_TOKEN || 'docuverse-email-secret-2026';
@@ -172,6 +174,133 @@ const sendReviewEmailDirectFromNode = async ({
     const absoluteDocLink = toAbsoluteNodeDocLink(documentLink);
     const safeSenderName = senderName || 'DocuVerse User';
     const safeProjectName = projectName || 'DocuVerse Project';
+    const stageLabel = isResend ? 'REVISION REVIEW' : 'TECHNICAL REVIEW STAGE';
+
+    // Format notes/content as HTML paragraphs
+    const notesHtml = notes
+        ? notes
+            .split('\n')
+            .filter(line => line.trim())
+            .map(line => {
+                const trimmed = line.trim();
+                if (trimmed.startsWith('# '))
+                    return `<h3 style="margin:14px 0 6px 0;color:#e6edf3;font-size:15px;">${trimmed.slice(2)}</h3>`;
+                if (trimmed.startsWith('**') && trimmed.endsWith('**'))
+                    return `<p style="margin:10px 0 4px 0;color:#e6edf3;font-weight:700;font-size:13px;">${trimmed.slice(2, -2)}</p>`;
+                if (trimmed.startsWith('- '))
+                    return `<p style="margin:2px 0 2px 12px;color:#8b949e;font-size:12px;">• ${trimmed.slice(2)}</p>`;
+                return `<p style="margin:2px 0;color:#8b949e;font-size:12px;">${trimmed}</p>`;
+            })
+            .join('\n')
+        : '';
+
+    // Build the reply-to mailto link for "Request Changes"
+    const replySubject = encodeURIComponent(`Re: ${subject}`);
+    const replyBody = encodeURIComponent(`Hi ${safeSenderName},\n\nI've reviewed the document for "${safeProjectName}" and have the following feedback:\n\n- \n\nThank you.`);
+    const requestChangesLink = `mailto:${senderEmail || ''}?subject=${replySubject}&body=${replyBody}`;
+    const approveLink = `mailto:${senderEmail || ''}?subject=${encodeURIComponent(`✅ Approved: ${safeProjectName}`)}&body=${encodeURIComponent(`Hi ${safeSenderName},\n\nI've reviewed and approved the document for "${safeProjectName}".\n\nLooks good — no changes needed.\n\nThank you.`)}`;
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#0d1117;font-family:'Segoe UI',Arial,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0d1117;">
+<tr><td align="center" style="padding:24px 12px;">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+
+  <!-- HEADER -->
+  <tr><td style="background:linear-gradient(135deg,#161b22 0%,#0d1117 100%);border:1px solid #30363d;border-radius:12px 12px 0 0;padding:20px 24px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+      <tr>
+        <td style="vertical-align:middle;">
+          <div style="width:44px;height:44px;border-radius:10px;background:#0a0a0a;border:1px solid rgba(255,255,255,0.12);text-align:center;line-height:44px;font-family:'Courier New',monospace;font-weight:700;font-size:18px;">
+            <span style="color:#22d3ee;">&gt;</span><span style="color:#fff;">_</span>
+          </div>
+        </td>
+        <td style="padding-left:14px;vertical-align:middle;">
+          <div style="color:#e6edf3;font-size:20px;font-weight:800;letter-spacing:-0.3px;">DocuVerse Studio: Review</div>
+          <div style="color:#22d3ee;font-size:11px;font-weight:600;letter-spacing:0.5px;margin-top:3px;">Stage: [${stageLabel}]</div>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+
+  <!-- BODY -->
+  <tr><td style="background:#161b22;border-left:1px solid #30363d;border-right:1px solid #30363d;padding:24px;">
+
+    <!-- Greeting -->
+    <p style="margin:0 0 16px 0;color:#c9d1d9;font-size:14px;">Hello,</p>
+    <p style="margin:0 0 16px 0;color:#c9d1d9;font-size:14px;">
+      You have been invited to review the Software Requirements Specification (SRS) for: <strong style="color:#e6edf3;">${safeProjectName}</strong>
+    </p>
+
+    <!-- Document Link Card -->
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;">
+      <tr><td style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px 16px;">
+        <p style="margin:0 0 6px 0;color:#8b949e;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">📄 Document Link</p>
+        <a href="${absoluteDocLink}" style="color:#58a6ff;font-size:13px;word-break:break-all;text-decoration:none;">${absoluteDocLink}</a>
+      </td></tr>
+    </table>
+
+    <!-- Prepared By -->
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:12px 0;">
+      <tr><td style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px 16px;">
+        <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+          <td style="color:#8b949e;font-size:12px;padding-right:8px;">Prepared by:</td>
+          <td style="color:#e6edf3;font-size:13px;font-weight:600;">${safeSenderName}${senderEmail ? ` &lt;${senderEmail}&gt;` : ''}</td>
+        </tr></table>
+      </td></tr>
+    </table>
+
+    ${notesHtml ? `
+    <!-- Additional Notes / Project Details -->
+    <div style="margin:20px 0 16px 0;">
+      <p style="margin:0 0 10px 0;color:#e6edf3;font-size:13px;font-weight:700;border-bottom:1px solid #30363d;padding-bottom:8px;">📋 Additional Notes:</p>
+      <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px 16px;font-size:12px;line-height:1.6;">
+        ${notesHtml}
+      </div>
+    </div>
+    ` : ''}
+
+    <!-- Review Instructions -->
+    <p style="margin:20px 0 8px 0;color:#c9d1d9;font-size:13px;">
+      A ${isResend ? 'revised' : 'new'} SRS document has been generated and is ready for your technical review.
+    </p>
+    <p style="margin:0 0 20px 0;color:#8b949e;font-size:12px;">
+      Please use the buttons below to Approve or Request Changes.
+    </p>
+
+    <!-- ACTION BUTTONS -->
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:6px 0 20px 0;">
+      <tr>
+        <td style="padding-right:12px;">
+          <a href="${approveLink}" style="display:inline-block;background:#238636;color:#ffffff;text-decoration:none;padding:11px 22px;border-radius:8px;font-weight:700;font-size:13px;letter-spacing:0.2px;">
+            ✅ Approve Document
+          </a>
+        </td>
+        <td>
+          <a href="${requestChangesLink}" style="display:inline-block;background:#da3633;color:#ffffff;text-decoration:none;padding:11px 22px;border-radius:8px;font-weight:700;font-size:13px;letter-spacing:0.2px;">
+            ✏️ Request Changes
+          </a>
+        </td>
+      </tr>
+    </table>
+
+  </td></tr>
+
+  <!-- FOOTER -->
+  <tr><td style="background:#0d1117;border:1px solid #30363d;border-top:none;border-radius:0 0 12px 12px;padding:16px 24px;">
+    <p style="margin:0;color:#484f58;font-size:11px;line-height:1.5;">
+      This is an automated delivery from DocuVerse. Please reply directly to this email if you have specific questions for the author.
+    </p>
+  </td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
 
     const body = {
         token,
@@ -179,16 +308,8 @@ const sendReviewEmailDirectFromNode = async ({
         subject,
         fromName: 'DocuVerse',
         replyTo: senderEmail || undefined,
-        html: `
-          <div style="font-family:Arial,sans-serif;color:#111">
-            <h2>DocuVerse Review Request</h2>
-            <p><strong>Project:</strong> ${safeProjectName}</p>
-            <p><strong>Prepared by:</strong> ${safeSenderName}${senderEmail ? ` &lt;${senderEmail}&gt;` : ''}</p>
-            <p>Please review the attached DOCX. If attachment is missing, use this link:</p>
-            <p><a href="${absoluteDocLink}">${absoluteDocLink}</a></p>
-          </div>
-        `,
-        text: `DocuVerse review request for ${safeProjectName}. Document: ${absoluteDocLink}`,
+        html,
+        text: `DocuVerse review request for ${safeProjectName}.\n\nPrepared by: ${safeSenderName}\nDocument: ${absoluteDocLink}\n\n${notes || ''}\n\nPlease review and reply to approve or request changes.`,
     };
 
     // Attach DOCX directly from buffer (base64 for Apps Script)
@@ -661,6 +782,7 @@ router.post('/:id/send-review', isLoggedIn, async (req, res) => {
             senderEmail,
             senderName,
             projectName,
+            notes,
             isResend = false
         } = req.body || {};
 
@@ -670,6 +792,7 @@ router.post('/:id/send-review', isLoggedIn, async (req, res) => {
         const finalProjectName = projectName || project.title || 'DocuVerse Project';
         const finalSenderName = senderName || req.user.name || 'DocuVerse User';
         const finalSenderEmail = senderEmail || req.user.email || undefined;
+        const finalNotes = notes || project.contentMarkdown || '';
 
         // Send email directly from Node — fast and reliable
         await sendReviewEmailDirectFromNode({
@@ -681,7 +804,9 @@ router.post('/:id/send-review', isLoggedIn, async (req, res) => {
             senderEmail: finalSenderEmail,
             documentLink: finalDocumentLink,
             projectName: finalProjectName,
-            docxBuffer: project.docxBuffer || null
+            docxBuffer: project.docxBuffer || null,
+            notes: finalNotes,
+            isResend
         });
 
         // Update project status
