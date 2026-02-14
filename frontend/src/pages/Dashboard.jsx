@@ -19,18 +19,22 @@ const Dashboard = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        console.log("Dashboard mounted. Token:", token ? "Present" : "Missing", "User:", user);
+        if (!token) {
+            setLoading(false);
+            return;
+        }
+
         const fetchProjects = async () => {
             try {
-                if (!token) {
-                    setProjects([]);
-                    return;
-                }
+                console.log("Fetching projects...");
                 const nodeApiBase = normalizeApiBase(import.meta.env.VITE_NODE_API_URL, defaultNodeBase());
                 const res = await axios.get(`${nodeApiBase}/api/projects`, {
                     headers: {
                         Authorization: `Bearer ${token}`
                     }
                 });
+                console.log("Projects fetched:", res.data);
                 setProjects(res.data);
             } catch (err) {
                 console.error("Failed to fetch projects", err);
@@ -38,8 +42,18 @@ const Dashboard = () => {
                 setLoading(false);
             }
         };
-        if (token) fetchProjects();
+        fetchProjects();
     }, [token]);
+
+    // Redirect to login if not authenticated and not loading
+    useEffect(() => {
+        if (!loading && !token) {
+            console.log("No token, redirecting into login...");
+            // Optional: navigate('/login'); 
+            // For now, let's just show the empty state or a specific "please login" state if desired.
+            // But usually Dashboard should be protected.
+        }
+    }, [loading, token]);
 
     const handleOpenStudio = (projectId) => {
         navigate(`/studio/${projectId}`);

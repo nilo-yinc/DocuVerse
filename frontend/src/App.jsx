@@ -32,7 +32,11 @@ function App() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/library" element={<Library />} />
             <Route path="/library/:modelId" element={<ModelSimulation />} />
-            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/dashboard" element={
+              <PrivateRoute redirectTo="/login">
+                <Dashboard />
+              </PrivateRoute>
+            } />
             <Route path="/login" element={<Login />} />
             <Route path="/demo/:id" element={<Demo />} />
             <Route path="/studio" element={<Navigate to="/studio/demo" />} />
