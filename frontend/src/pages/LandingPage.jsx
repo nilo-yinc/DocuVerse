@@ -70,7 +70,24 @@ const LandingPage = () => {
                     </div>
                     <h1 className="text-5xl md:text-7xl font-bold text-white tracking-tight leading-tight">
                         Documentation <br />
-                        <span className="text-[#79c0ff]">{fullText}</span>
+                        <motion.span
+                            className="text-[#79c0ff] inline-block"
+                            initial={{ opacity: 1 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ staggerChildren: 0.1, delayChildren: 0.2 }}
+                        >
+                            {fullText.split("").map((char, index) => (
+                                <motion.span
+                                    key={index}
+                                    className="inline-block"
+                                    initial={{ opacity: 0, x: -10 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ duration: 0.3, ease: "easeOut" }}
+                                >
+                                    {char === " " ? "\u00A0" : char}
+                                </motion.span>
+                            ))}
+                        </motion.span>
                     </h1>
                     <p className="text-lg text-[#8b949e] max-w-lg leading-relaxed">
                         Architect your vision with precision. Generate engineering-grade IEEE documentation and actionable system insights with AI-driven intelligence.

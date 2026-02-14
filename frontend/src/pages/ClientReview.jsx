@@ -11,6 +11,7 @@ const ClientReview = () => {
     const [action, setAction] = useState(null); // 'APPROVE' | 'REQUEST_CHANGES' | 'SUCCESS'
     const [feedback, setFeedback] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const [reviewReceipt, setReviewReceipt] = useState(null);
 
     // Dynamic API base URL based on environment
     const apiBase = import.meta.env.VITE_API_URL || 'https://docuverse-node.onrender.com';
@@ -39,9 +40,14 @@ const ClientReview = () => {
 
         setSubmitting(true);
         try {
-            await axios.post(`${apiBase}/api/projects/${id}/submit-review`, {
+            const res = await axios.post(`${apiBase}/api/projects/${id}/submit-review`, {
                 status,
                 feedback: status === 'CHANGES_REQUESTED' ? feedback : 'Approved by client.'
+            });
+            setReviewReceipt({
+                status: res.data?.status || status,
+                submittedAt: res.data?.submittedAt || new Date().toISOString(),
+                text: res.data?.feedback?.comment || res.data?.feedback?.content || (status === 'APPROVED' ? 'Approved by client.' : feedback)
             });
             setAction('SUCCESS');
             fetchProject(); // Refresh status
@@ -78,6 +84,19 @@ const ClientReview = () => {
                     The project <strong>{project.title}</strong> has been {project.status === 'APPROVED' ? 'approved' : 'reviewed'}.
                     <br />The team has been notified.
                 </p>
+                {reviewReceipt && (
+                    <div className="mt-6 text-left bg-[#0d1117] border border-[#30363d] rounded-lg p-4">
+                        <div className="text-xs text-[#8b949e] mb-1">
+                            Saved at {new Date(reviewReceipt.submittedAt).toLocaleString()}
+                        </div>
+                        <div className="text-xs font-semibold mb-2 text-[#79c0ff]">
+                            {reviewReceipt.status === 'APPROVED' ? 'Approved' : 'Changes Requested'}
+                        </div>
+                        <div className="text-sm text-[#c9d1d9] whitespace-pre-wrap">
+                            {reviewReceipt.text}
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

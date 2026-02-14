@@ -395,6 +395,7 @@ router.put('/:id', isLoggedIn, async (req, res) => {
         if (clientEmail !== undefined) project.clientEmail = clientEmail;
         if (hq !== undefined) project.hq = { ...(project.hq || {}), ...hq };
 
+        const savedFeedback = project.reviewFeedback[project.reviewFeedback.length - 1] || null;
         await project.save();
         res.json(project);
     } catch (err) {
@@ -1019,7 +1020,12 @@ router.post('/:id/submit-review', async (req, res) => {
             console.warn('Public review sync warning:', syncErr?.message || syncErr);
         }
 
-        res.json({ msg: 'Review submitted successfully' });
+        res.json({
+            msg: 'Review submitted successfully',
+            status: project.status,
+            submittedAt: nowIso,
+            feedback: savedFeedback
+        });
 
     } catch (err) {
         console.error(err);
