@@ -165,62 +165,59 @@ const sendReviewEmailDirectFromNode = async ({
     projectName,
     docxBuffer
 }) => {
-    const apiKey = process.env.BREVO_API_KEY;
-    if (!apiKey) throw new Error('BREVO_API_KEY is not set');
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) throw new Error('RESEND_API_KEY is not set');
 
-    const fromSender = String(process.env.SENDER_EMAIL || process.env.EMAIL_USER || '').trim();
-    if (!fromSender) throw new Error('SENDER_EMAIL is not set');
+    // Resend free tier: use onboarding@resend.dev or a verified domain
+    const fromAddress = process.env.RESEND_FROM || 'DocuVerse <onboarding@resend.dev>';
 
     const absoluteDocLink = toAbsoluteNodeDocLink(documentLink);
     const safeSenderName = senderName || 'DocuVerse User';
     const safeProjectName = projectName || 'DocuVerse Project';
 
-    const htmlContent = `
-      <div style="font-family:Arial,sans-serif;color:#111">
-        <h2>DocuVerse Review Request</h2>
-        <p><strong>Project:</strong> ${safeProjectName}</p>
-        <p><strong>Prepared by:</strong> ${safeSenderName}${senderEmail ? ` &lt;${senderEmail}&gt;` : ''}</p>
-        <p>Please review the attached DOCX. If attachment is missing, use this link:</p>
-        <p><a href="${absoluteDocLink}">${absoluteDocLink}</a></p>
-      </div>
-    `;
-
     const body = {
-        sender: { name: 'DocuVerse', email: fromSender },
-        to: [{ email: toEmail }],
-        replyTo: senderEmail ? { email: senderEmail } : undefined,
+        from: fromAddress,
+        to: [toEmail],
+        reply_to: senderEmail || undefined,
         subject,
-        htmlContent,
-        textContent: `DocuVerse review request for ${safeProjectName}. Document: ${absoluteDocLink}`,
+        html: `
+          <div style="font-family:Arial,sans-serif;color:#111">
+            <h2>DocuVerse Review Request</h2>
+            <p><strong>Project:</strong> ${safeProjectName}</p>
+            <p><strong>Prepared by:</strong> ${safeSenderName}${senderEmail ? ` &lt;${senderEmail}&gt;` : ''}</p>
+            <p>Please review the attached DOCX. If attachment is missing, use this link:</p>
+            <p><a href="${absoluteDocLink}">${absoluteDocLink}</a></p>
+          </div>
+        `,
+        text: `DocuVerse review request for ${safeProjectName}. Document: ${absoluteDocLink}`,
     };
 
-    // Attach DOCX directly from buffer (base64 for Brevo)
+    // Attach DOCX directly from buffer (base64 for Resend)
     if (docxBuffer && docxBuffer.length > 0) {
-        body.attachment = [{
-            name: extractFilenameFromLink(absoluteDocLink) || 'SRS_Document.docx',
+        body.attachments = [{
+            filename: extractFilenameFromLink(absoluteDocLink) || 'SRS_Document.docx',
             content: Buffer.isBuffer(docxBuffer)
                 ? docxBuffer.toString('base64')
                 : docxBuffer
         }];
     }
 
-    const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
+    const resp = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
-            'api-key': apiKey,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
         },
         body: JSON.stringify(body)
     });
 
     if (!resp.ok) {
         const errText = await resp.text();
-        throw new Error(`Brevo API error ${resp.status}: ${errText}`);
+        throw new Error(`Resend API error ${resp.status}: ${errText}`);
     }
 
     const result = await resp.json();
-    console.log('Review email sent via Brevo:', result.messageId || JSON.stringify(result));
+    console.log('Review email sent via Resend:', result.id || JSON.stringify(result));
 };
 
 const applyDocFromPythonToProject = async (project, pyDownloadUrl) => {

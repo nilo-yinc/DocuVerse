@@ -1,52 +1,55 @@
-// Email sending via Brevo HTTP API (replaces nodemailer SMTP — Render blocks SMTP)
-const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
+// Email sending via Resend HTTP API (Render blocks SMTP, Brevo needs activation)
+const RESEND_API_URL = "https://api.resend.com/emails";
 
 /**
- * Send an email via Brevo's transactional HTTP API.
+ * Send an email via Resend's REST API.
  * Uses fetch() over HTTPS — works on every hosting platform.
  */
-const sendViaBrev = async ({ from, fromName, to, subject, html, text, attachments }) => {
-  const apiKey = process.env.BREVO_API_KEY;
-  if (!apiKey) throw new Error("BREVO_API_KEY is not set");
+const sendViaResend = async ({ from, fromName, to, subject, html, text, replyTo, attachments }) => {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) throw new Error("RESEND_API_KEY is not set");
 
-  const senderEmail = from || process.env.SENDER_EMAIL || process.env.EMAIL_USER;
-  const senderName = fromName || "DocuVerse";
+  // Resend free tier: use onboarding@resend.dev or a verified domain
+  const senderEmail = from || process.env.RESEND_FROM || "DocuVerse <onboarding@resend.dev>";
+  const senderFormatted = fromName
+    ? `${fromName} <${senderEmail.includes("<") ? senderEmail.match(/<(.+)>/)?.[1] || senderEmail : senderEmail}>`
+    : senderEmail;
 
   const body = {
-    sender: { name: senderName, email: senderEmail },
-    to: [{ email: to }],
+    from: senderFormatted,
+    to: Array.isArray(to) ? to : [to],
     subject,
-    htmlContent: html || undefined,
-    textContent: text || undefined,
+    html: html || undefined,
+    text: text || undefined,
+    reply_to: replyTo || undefined,
   };
 
-  // Brevo attachments: [{ name, content (base64) }]
+  // Resend attachments: [{ filename, content (base64 string) }]
   if (attachments && attachments.length > 0) {
-    body.attachment = attachments.map((a) => ({
-      name: a.filename || "document.docx",
+    body.attachments = attachments.map((a) => ({
+      filename: a.filename || "document.docx",
       content: Buffer.isBuffer(a.content)
         ? a.content.toString("base64")
         : a.content,
     }));
   }
 
-  const resp = await fetch(BREVO_API_URL, {
+  const resp = await fetch(RESEND_API_URL, {
     method: "POST",
     headers: {
-      "api-key": apiKey,
+      "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      Accept: "application/json",
     },
     body: JSON.stringify(body),
   });
 
   if (!resp.ok) {
     const errText = await resp.text();
-    throw new Error(`Brevo API error ${resp.status}: ${errText}`);
+    throw new Error(`Resend API error ${resp.status}: ${errText}`);
   }
 
   const result = await resp.json();
-  console.log("Brevo email sent:", result.messageId || JSON.stringify(result));
+  console.log("Resend email sent:", result.id || JSON.stringify(result));
   return result;
 };
 
@@ -93,7 +96,7 @@ const sendVerificationEmail = async (email, token) => {
   try {
     const verificationUrl = `${process.env.BASE_URL}/api/v1/users/verify/${token}`;
 
-    await sendViaBrev({
+    await sendViaResend({
       to: email,
       subject: "Please verify your email address",
       text: `Thank you for registering! Please verify your email address: ${verificationUrl}\nThis link expires in 10 minutes.`,
@@ -124,8 +127,7 @@ const sendVerificationEmail = async (email, token) => {
 
 const sendPasswordOTP = async (email, otp) => {
   try {
-    await sendViaBrev({
-      fromName: "DocuVerse Security",
+    await sendViaResend({
       to: email,
       subject: "Your password verification code",
       text: `Your verification code is ${otp}. It expires in 10 minutes.`,
@@ -159,7 +161,7 @@ const sendSuggestionAcknowledgement = async ({ email, name, title, priority }) =
     const safeTitle = title || "your idea";
     const safePriority = priority || "Medium";
 
-    await sendViaBrev({
+    await sendViaResend({
       to: email,
       subject: "Thank you for your suggestion",
       text: `Hi ${safeName},\n\nThank you for sharing your suggestion with DocuVerse.\n\nSuggestion: ${safeTitle}\nPriority: ${safePriority}\n\nWe received it successfully and our team will review it soon.\n\nRegards,\nDocuVerse Team`,
