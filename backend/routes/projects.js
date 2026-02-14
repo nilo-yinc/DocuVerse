@@ -165,7 +165,8 @@ const sendReviewEmailDirectFromNode = async ({
     projectName,
     docxBuffer,
     notes,
-    isResend
+    isResend,
+    reviewUrl
 }) => {
     const gatewayUrl = process.env.GMAIL_APPS_SCRIPT_URL;
     const token = process.env.GMAIL_APPS_SCRIPT_TOKEN || 'docuverse-email-secret-2026';
@@ -195,10 +196,8 @@ const sendReviewEmailDirectFromNode = async ({
         : '';
 
     // Build the reply-to mailto link for "Request Changes"
-    const replySubject = encodeURIComponent(`Re: ${subject}`);
-    const replyBody = encodeURIComponent(`Hi ${safeSenderName},\n\nI've reviewed the document for "${safeProjectName}" and have the following feedback:\n\n- \n\nThank you.`);
-    const requestChangesLink = `mailto:${senderEmail || ''}?subject=${replySubject}&body=${replyBody}`;
-    const approveLink = `mailto:${senderEmail || ''}?subject=${encodeURIComponent(`✅ Approved: ${safeProjectName}`)}&body=${encodeURIComponent(`Hi ${safeSenderName},\n\nI've reviewed and approved the document for "${safeProjectName}".\n\nLooks good — no changes needed.\n\nThank you.`)}`;
+    const requestChangesLink = reviewUrl || `mailto:${senderEmail || ''}?subject=${replySubject}&body=${replyBody}`;
+    const approveLink = reviewUrl || `mailto:${senderEmail || ''}?subject=${encodeURIComponent(`✅ Approved: ${safeProjectName}`)}&body=${encodeURIComponent(`Hi ${safeSenderName},\n\nI've reviewed and approved the document for "${safeProjectName}".\n\nLooks good — no changes needed.\n\nThank you.`)}`;
 
     const html = `
 <!DOCTYPE html>
@@ -794,6 +793,10 @@ router.post('/:id/send-review', isLoggedIn, async (req, res) => {
         const finalSenderEmail = senderEmail || req.user.email || undefined;
         const finalNotes = notes || project.contentMarkdown || '';
 
+        // Construct Review Page URL - Use env var or default to Vercel deployment
+        const frontendUrl = (process.env.FRONTEND_URL || 'https://docuverse-l63v4w3x9-niloy-malliks-projects.vercel.app').replace(/\/+$/, '');
+        const reviewUrl = `${frontendUrl}/review/${project._id}`;
+
         // Send email directly from Node — fast and reliable
         await sendReviewEmailDirectFromNode({
             toEmail: clientEmail,
@@ -803,6 +806,7 @@ router.post('/:id/send-review', isLoggedIn, async (req, res) => {
             senderName: finalSenderName,
             senderEmail: finalSenderEmail,
             documentLink: finalDocumentLink,
+            reviewUrl,
             projectName: finalProjectName,
             docxBuffer: project.docxBuffer || null,
             notes: finalNotes,
@@ -922,6 +926,64 @@ router.delete('/:id', isLoggedIn, async (req, res) => {
         res.json({ success: true });
     } catch (err) {
         console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
+// @route   GET /api/projects/:id/public-review
+// @desc    Get project details for public review page
+// @access  Public
+router.get('/:id/public-review', async (req, res) => {
+    try {
+        const project = await Project.findById(req.params.id).select('title status documentUrl reviewFeedback clientEmail');
+        if (!project) return res.status(404).json({ msg: 'Project not found' });
+        res.json(project);
+    } catch (err) {
+        console.error(err);
+        if (err.kind === 'ObjectId') return res.status(404).json({ msg: 'Project not found' });
+        res.status(500).send('Server Error');
+    }
+});
+
+// @route   POST /api/projects/:id/submit-review
+// @desc    Submit review feedback from public page
+// @access  Public
+router.post('/:id/submit-review', async (req, res) => {
+    try {
+        const { status, feedback } = req.body;
+        if (!['APPROVED', 'CHANGES_REQUESTED'].includes(status)) {
+            return res.status(400).json({ msg: 'Invalid status' });
+        }
+
+        const project = await Project.findById(req.params.id);
+        if (!project) return res.status(404).json({ msg: 'Project not found' });
+
+        project.status = status;
+        project.reviewFeedback = project.reviewFeedback || [];
+        
+        project.reviewFeedback.push({
+            id: new Date().getTime().toString(),
+            date: new Date().toISOString(),
+            user: project.clientEmail || 'Client Reviewer',
+            content: feedback || (status === 'APPROVED' ? 'Approved by client.' : 'Changes requested.'),
+            type: status === 'APPROVED' ? 'approval' : 'request_changes'
+        });
+
+        project.workflowEvents = project.workflowEvents || [];
+        project.workflowEvents.push({
+            date: new Date().toISOString(),
+            title: status === 'APPROVED' ? 'Client Approved' : 'Changes Requested',
+            description: status === 'APPROVED' 
+                ? 'Document approved via review page.' 
+                : 'Client requested changes via review page.',
+            status: status
+        });
+
+        await project.save();
+        res.json({ msg: 'Review submitted successfully' });
+
+    } catch (err) {
+        console.error(err);
         res.status(500).send('Server Error');
     }
 });

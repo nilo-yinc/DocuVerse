@@ -15,6 +15,7 @@ import ModelSimulation from './pages/ModelSimulation';
 import StudioPage from './pages/StudioPage';
 import EnterpriseSRS from './pages/EnterpriseSRS';
 import CurriculumPage from './pages/CurriculumPage';
+import ClientReview from './pages/ClientReview';
 
 const PrivateRoute = ({ children, redirectTo = "/dashboard" }) => {
   const { token, loading } = useAuth();
@@ -38,6 +39,7 @@ function App() {
             <Route path="/studio/:id" element={<StudioPage />} />
             <Route path="/system-design" element={<SystemDesignPlayground />} />
             <Route path="/curriculum" element={<CurriculumPage />} />
+            <Route path="/review/:id" element={<ClientReview />} />
 
             {/* Authentication Pages */}
             <Route path="/enterprise/access" element={<EnterpriseAccess />} />
