@@ -197,7 +197,7 @@ const sendReviewEmailDirectFromNode = async ({
 
     // Build the reply-to mailto link for "Request Changes"
     const requestChangesLink = reviewUrl || `mailto:${senderEmail || ''}?subject=${replySubject}&body=${replyBody}`;
-    const approveLink = reviewUrl || `mailto:${senderEmail || ''}?subject=${encodeURIComponent(`✅ Approved: ${safeProjectName}`)}&body=${encodeURIComponent(`Hi ${safeSenderName},\n\nI've reviewed and approved the document for "${safeProjectName}".\n\nLooks good — no changes needed.\n\nThank you.`)}`;
+    const approveLink = reviewUrl || `mailto:${senderEmail || ''}?subject=${encodeURIComponent(`Approved: ${safeProjectName}`)}&body=${encodeURIComponent(`Hi ${safeSenderName},\n\nI've reviewed and approved the document for "${safeProjectName}".\n\nLooks good — no changes needed.\n\nThank you.`)}`;
 
     const html = `
 <!DOCTYPE html>
@@ -275,12 +275,12 @@ const sendReviewEmailDirectFromNode = async ({
       <tr>
         <td style="padding-right:12px;">
           <a href="${approveLink}" style="display:inline-block;background:#238636;color:#ffffff;text-decoration:none;padding:11px 22px;border-radius:8px;font-weight:700;font-size:13px;letter-spacing:0.2px;">
-            ✅ Approve Document
+            Approve Document
           </a>
         </td>
         <td>
           <a href="${requestChangesLink}" style="display:inline-block;background:#da3633;color:#ffffff;text-decoration:none;padding:11px 22px;border-radius:8px;font-weight:700;font-size:13px;letter-spacing:0.2px;">
-            ✏️ Request Changes
+            Request Changes
           </a>
         </td>
       </tr>
