@@ -1,11 +1,22 @@
 // email sending using nodemailer
 const dns = require("dns");
-dns.setDefaultResultOrder("ipv4first"); // Force IPv4 - Render free tier blocks IPv6 to Gmail
 const nodemailer = require("nodemailer");
+
+// Custom DNS lookup that forces IPv4 — Render blocks IPv6 to Gmail
+const ipv4Lookup = (hostname, options, callback) => {
+  if (typeof options === "function") {
+    callback = options;
+    options = {};
+  }
+  options = Object.assign({}, options, { family: 4 });
+  return dns.lookup(hostname, options, callback);
+};
 
 const buildTransporter = () => {
   return nodemailer.createTransport({
-    service: "gmail",          // Uses smtp.gmail.com:465 (SSL) automatically
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true,              // direct SSL on port 465
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
@@ -13,6 +24,7 @@ const buildTransporter = () => {
     tls: {
       rejectUnauthorized: false,
     },
+    dnsLookup: ipv4Lookup,     // force IPv4 DNS resolution
     connectionTimeout: 15000,
     greetingTimeout: 15000,
     socketTimeout: 30000,

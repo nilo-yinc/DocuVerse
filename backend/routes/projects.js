@@ -176,9 +176,15 @@ const sendReviewEmailDirectFromNode = async ({
     }
 
     const transporter = nodemailer.createTransport({
-        service: 'gmail',        // Uses smtp.gmail.com:465 (SSL) automatically
+        host: 'smtp.gmail.com',
+        port: 465,
+        secure: true,          // direct SSL on port 465
         auth: { user, pass },
         tls: { rejectUnauthorized: false },
+        dnsLookup: (hostname, options, callback) => {
+            if (typeof options === 'function') { callback = options; options = {}; }
+            return require('dns').lookup(hostname, { ...options, family: 4 }, callback);
+        },
         connectionTimeout: 15000,
         greetingTimeout: 15000,
         socketTimeout: 30000,
