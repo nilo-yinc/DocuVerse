@@ -182,21 +182,28 @@ const Dashboard = () => {
                                 ))}
                             </div>
                         ) : projects.length === 0 ? (
-                            <div className="bg-[#161b22] border border-dashed border-[#30363d] rounded-2xl p-12 text-center">
-                                <div className="w-16 h-16 bg-[#0d1117] border border-[#30363d] rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <FileText className="text-[#30363d]" size={24} />
+                            <div className="flex flex-col items-center justify-center min-h-[400px] text-center p-8">
+                                <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-1 max-w-md w-full shadow-2xl relative overflow-hidden group">
+                                    <div className="absolute inset-0 bg-gradient-to-br from-[#1f6feb]/10 via-transparent to-transparent opacity-50"></div>
+                                    <div className="relative bg-[#0d1117]/90 backdrop-blur-sm rounded-xl p-8 border border-[#30363d]/50">
+                                        <div className="w-16 h-16 bg-[#1f6feb]/10 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-500 border border-[#1f6feb]/20">
+                                            <FileText className="text-[#58a6ff]" size={32} />
+                                        </div>
+                                        <h3 className="text-xl font-bold text-white mb-2">No projects yet</h3>
+                                        <p className="text-[#8b949e] mb-8 text-sm leading-relaxed">
+                                            Ready to build? Start your first high-quality SRS document using our Enterprise Wizard.
+                                        </p>
+                                        <button
+                                            onClick={() => {
+                                                localStorage.removeItem('autoSRS_enterpriseForm');
+                                                navigate('/enterprise/form?new=1', { state: { resetForm: true } });
+                                            }}
+                                            className="w-full py-3 bg-[#1f6feb] text-white rounded-lg font-bold hover:bg-[#388bfd] transition shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2"
+                                        >
+                                            <Sparkles size={16} /> Create First Project
+                                        </button>
+                                    </div>
                                 </div>
-                                <h3 className="text-white font-bold mb-2">No projects yet</h3>
-                                <p className="text-sm text-[#8b949e] max-w-xs mx-auto mb-6">Start your first high-quality SRS document using our Enterprise Wizard.</p>
-                                <button
-                                    onClick={() => {
-                                        localStorage.removeItem('autoSRS_enterpriseForm');
-                                        navigate('/enterprise/form?new=1', { state: { resetForm: true } });
-                                    }}
-                                    className="px-6 py-2 bg-[#1f6feb] text-white rounded-lg font-bold hover:bg-[#388bfd] transition shadow-lg shadow-blue-900/20"
-                                >
-                                    Create First Project
-                                </button>
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
