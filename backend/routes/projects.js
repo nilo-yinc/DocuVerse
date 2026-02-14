@@ -3,6 +3,7 @@ const router = express.Router();
 const isLoggedIn = require('../middlewares/isLoggedIn.middleware');
 const Project = require('../models/Project');
 const axios = require('axios');
+const nodemailer = require('nodemailer');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { deleteDocxById, markDocxExpireAt, uploadDocxBuffer } = require('../utils/docxGridfs');
 
@@ -132,6 +133,95 @@ const callPythonWithRetry = async (requestFactory, retries = 2) => {
         }
     }
     throw lastError;
+};
+
+const toAbsoluteNodeDocLink = (documentLink) => {
+    if (!documentLink) return '';
+    if (String(documentLink).startsWith('http://') || String(documentLink).startsWith('https://')) {
+        return documentLink;
+    }
+    const nodePublicUrl = String(process.env.NODE_PUBLIC_URL || process.env.BACKEND_PUBLIC_URL || '').replace(/\/+$/, '');
+    if (nodePublicUrl && String(documentLink).startsWith('/')) {
+        return `${nodePublicUrl}${documentLink}`;
+    }
+    return documentLink;
+};
+
+const extractFilenameFromLink = (documentLink, fallback = 'srs.docx') => {
+    try {
+        const clean = String(documentLink || '').split('?')[0];
+        const tail = clean.substring(clean.lastIndexOf('/') + 1);
+        return decodeURIComponent(tail || fallback);
+    } catch (_) {
+        return fallback;
+    }
+};
+
+const sendReviewEmailDirectFromNode = async ({
+    toEmail,
+    subject,
+    senderName,
+    senderEmail,
+    documentLink,
+    projectName
+}) => {
+    const host = String(process.env.EMAIL_HOST || '').trim();
+    const port = Number(process.env.EMAIL_PORT || 587);
+    const secure = String(process.env.EMAIL_SECURE || 'false').toLowerCase() === 'true';
+    const user = String(process.env.EMAIL_USER || '').trim();
+    const pass = String(process.env.EMAIL_PASS || '').trim();
+    const fromSender = String(process.env.SENDER_EMAIL || user || '').trim();
+
+    if (!host || !user || !pass || !fromSender) {
+        throw new Error('Node SMTP config missing (EMAIL_HOST/EMAIL_USER/EMAIL_PASS/SENDER_EMAIL).');
+    }
+
+    const transporter = nodemailer.createTransport({
+        host,
+        port,
+        secure,
+        auth: { user, pass },
+    });
+
+    const absoluteDocLink = toAbsoluteNodeDocLink(documentLink);
+    const attachments = [];
+    if (absoluteDocLink) {
+        try {
+            const resp = await axios.get(absoluteDocLink, {
+                responseType: 'arraybuffer',
+                timeout: 120000
+            });
+            attachments.push({
+                filename: extractFilenameFromLink(absoluteDocLink),
+                content: Buffer.from(resp.data),
+                contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            });
+        } catch (err) {
+            console.warn('Direct email fallback: attachment fetch failed, sending link-only email.', err?.message || err);
+        }
+    }
+
+    const safeSenderName = senderName || 'DocuVerse User';
+    const safeProjectName = projectName || 'DocuVerse Project';
+    const html = `
+      <div style="font-family:Arial,sans-serif;color:#111">
+        <h2>DocuVerse Review Request</h2>
+        <p><strong>Project:</strong> ${safeProjectName}</p>
+        <p><strong>Prepared by:</strong> ${safeSenderName}${senderEmail ? ` &lt;${senderEmail}&gt;` : ''}</p>
+        <p>Please review the attached DOCX. If attachment is missing, use this link:</p>
+        <p><a href="${absoluteDocLink}">${absoluteDocLink}</a></p>
+      </div>
+    `;
+
+    await transporter.sendMail({
+        from: `DocuVerse <${fromSender}>`,
+        to: toEmail,
+        replyTo: senderEmail || undefined,
+        subject,
+        text: `DocuVerse review request for ${safeProjectName}. Document: ${absoluteDocLink}`,
+        html,
+        attachments
+    });
 };
 
 const applyDocFromPythonToProject = async (project, pyDownloadUrl) => {
@@ -618,17 +708,52 @@ router.post('/:id/send-review', isLoggedIn, async (req, res) => {
         }
 
         const endpoint = isResend ? '/api/workflow/resend-review' : '/api/workflow/start-review';
-        const wfRes = await callPythonWithRetry(() => axios.post(`${pyBase}${endpoint}`, {
-            projectId: project._id.toString(),
-            clientEmail,
-            documentLink: project.documentUrl || documentLink || undefined,
-            senderEmail: senderEmail || req.user.email || undefined,
-            senderName: senderName || req.user.name || undefined,
-            projectName: projectName || project.title || undefined,
-            insights: insights || [],
-            notes: notes || project.contentMarkdown || '',
-            isUpdate
-        }, { timeout: getPyWorkflowTimeoutMs() }), 1);
+        let wfRes = null;
+        let directFallbackUsed = false;
+        const finalDocumentLink = project.documentUrl || documentLink || undefined;
+
+        try {
+            wfRes = await callPythonWithRetry(() => axios.post(`${pyBase}${endpoint}`, {
+                projectId: project._id.toString(),
+                clientEmail,
+                documentLink: finalDocumentLink,
+                senderEmail: senderEmail || req.user.email || undefined,
+                senderName: senderName || req.user.name || undefined,
+                projectName: projectName || project.title || undefined,
+                insights: insights || [],
+                notes: notes || project.contentMarkdown || '',
+                isUpdate
+            }, { timeout: getPyWorkflowTimeoutMs() }), 1);
+
+            // If Python reports email warning, fallback to direct Node SMTP send.
+            if (wfRes?.data?.warning) {
+                await sendReviewEmailDirectFromNode({
+                    toEmail: clientEmail,
+                    subject: isResend
+                        ? `[Revised] DocuVerse Review Update: ${projectName || project.title || 'DocuVerse Project'}`
+                        : `[Action Required] DocuVerse Review: ${projectName || project.title || 'DocuVerse Project'}`,
+                    senderName: senderName || req.user.name || 'DocuVerse User',
+                    senderEmail: senderEmail || req.user.email || undefined,
+                    documentLink: finalDocumentLink,
+                    projectName: projectName || project.title || 'DocuVerse Project'
+                });
+                directFallbackUsed = true;
+            }
+        } catch (wfErr) {
+            // Python workflow failed entirely -> direct Node SMTP fallback.
+            await sendReviewEmailDirectFromNode({
+                toEmail: clientEmail,
+                subject: isResend
+                    ? `[Revised] DocuVerse Review Update: ${projectName || project.title || 'DocuVerse Project'}`
+                    : `[Action Required] DocuVerse Review: ${projectName || project.title || 'DocuVerse Project'}`,
+                senderName: senderName || req.user.name || 'DocuVerse User',
+                senderEmail: senderEmail || req.user.email || undefined,
+                documentLink: finalDocumentLink,
+                projectName: projectName || project.title || 'DocuVerse Project'
+            });
+            directFallbackUsed = true;
+            wfRes = { data: { warning: `Python workflow failed; Node SMTP fallback used (${wfErr?.message || 'unknown error'}).` } };
+        }
 
         project.clientEmail = clientEmail;
         project.status = 'IN_REVIEW';
@@ -644,7 +769,9 @@ router.post('/:id/send-review', isLoggedIn, async (req, res) => {
         res.json({
             status: 'IN_REVIEW',
             message: isResend ? 'Review resent successfully.' : 'Review sent successfully.',
-            warning: wfRes.data?.warning || syncWarning || null
+            warning: directFallbackUsed
+                ? (wfRes?.data?.warning || 'Node SMTP fallback used.')
+                : (wfRes?.data?.warning || syncWarning || null)
         });
     } catch (err) {
         console.error('Send review failed:', err?.response?.data || err?.message || err);
