@@ -45,15 +45,14 @@ const Dashboard = () => {
         fetchProjects();
     }, [token]);
 
-    // Redirect to login if not authenticated and not loading
+    // Redirect to login if not authenticated and not loading - REMOVED for Guest Access
+    /*
     useEffect(() => {
         if (!loading && !token) {
             console.log("No token, redirecting into login...");
-            // Optional: navigate('/login'); 
-            // For now, let's just show the empty state or a specific "please login" state if desired.
-            // But usually Dashboard should be protected.
         }
     }, [loading, token]);
+    */
 
     const handleOpenStudio = (projectId) => {
         navigate(`/studio/${projectId}`);

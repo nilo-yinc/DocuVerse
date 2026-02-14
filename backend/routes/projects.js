@@ -960,26 +960,65 @@ router.post('/:id/submit-review', async (req, res) => {
 
         project.status = status;
         project.reviewFeedback = project.reviewFeedback || [];
-        
+
+        const nowIso = new Date().toISOString();
+        const feedbackText = feedback || (status === 'APPROVED' ? 'Approved by client.' : 'Changes requested.');
+        const reviewer = project.clientEmail || 'Client Reviewer';
+
+        // Keep backward + forward compatible schema for studio UI
         project.reviewFeedback.push({
             id: new Date().getTime().toString(),
-            date: new Date().toISOString(),
-            user: project.clientEmail || 'Client Reviewer',
-            content: feedback || (status === 'APPROVED' ? 'Approved by client.' : 'Changes requested.'),
+            date: nowIso,
+            source: reviewer,
+            comment: feedbackText,
+            user: reviewer,
+            content: feedbackText,
             type: status === 'APPROVED' ? 'approval' : 'request_changes'
         });
 
         project.workflowEvents = project.workflowEvents || [];
-        project.workflowEvents.push({
-            date: new Date().toISOString(),
-            title: status === 'APPROVED' ? 'Client Approved' : 'Changes Requested',
-            description: status === 'APPROVED' 
-                ? 'Document approved via review page.' 
-                : 'Client requested changes via review page.',
-            status: status
-        });
+        if (status === 'APPROVED') {
+            project.workflowEvents.push({
+                date: nowIso,
+                title: 'Approved',
+                description: 'Client approved the document.',
+                status: 'APPROVED'
+            });
+        } else {
+            project.workflowEvents.push({
+                date: nowIso,
+                title: 'Changes Requested',
+                description: 'Client requested changes.',
+                status: 'CHANGES_REQUESTED'
+            });
+            project.workflowEvents.push({
+                date: nowIso,
+                title: 'Feedback Received',
+                description: 'Client submitted feedback.',
+                status: 'CHANGES_REQUESTED'
+            });
+        }
 
         await project.save();
+
+        // Best-effort sync into Python store so workflow/regenerate flow stays aligned.
+        try {
+            const pyBase = getPyBase();
+            await callPythonWithRetry(() => axios.post(`${pyBase}/api/project/create`, {
+                id: project._id.toString(),
+                name: project.title || 'DocuVerse Project',
+                content: project.contentMarkdown || buildMarkdownFromSrsRequest(project.enterpriseData || {}),
+                documentUrl: project.documentUrl || undefined,
+                status: project.status || 'DRAFT',
+                reviewedDocumentUrl: project.reviewedDocumentUrl || undefined,
+                clientEmail: project.clientEmail || undefined,
+                workflowEvents: project.workflowEvents || [],
+                reviewFeedback: project.reviewFeedback || []
+            }, { timeout: 45000 }), 1);
+        } catch (syncErr) {
+            console.warn('Public review sync warning:', syncErr?.message || syncErr);
+        }
+
         res.json({ msg: 'Review submitted successfully' });
 
     } catch (err) {
