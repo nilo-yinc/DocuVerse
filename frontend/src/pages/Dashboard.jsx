@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Building2, GraduationCap, User, FileText, Sparkles, Clock, ChevronRight, ExternalLink, Download, Layout, Trash2 } from 'lucide-react';
+import { Building2, GraduationCap, User, FileText, Sparkles, Clock, ChevronRight, ExternalLink, Download, Layout, Trash2, Plus } from 'lucide-react';
 import Logo from '../components/ui/Logo';
 import ProfileSettings from './ProfileSettings';
 import axios from 'axios';
@@ -42,6 +42,9 @@ const Dashboard = () => {
         const date = new Date(value);
         return Number.isNaN(date.getTime()) ? 'Last edited recently' : `Last edited ${date.toLocaleString()}`;
     };
+
+    const safeUserName = safeText(user?.name, 'User');
+    const safeUserRole = typeof user?.role === 'string' ? user.role : 'standard';
 
     useEffect(() => {
         console.log("Dashboard mounted. Token:", token ? "Present" : "Missing", "User:", user);
@@ -124,8 +127,8 @@ const Dashboard = () => {
                     {token && (
                         <>
                             <div className="text-right hidden sm:block">
-                                <div className="text-xs font-bold text-white tracking-wide">{user?.name || 'User'}</div>
-                                <div className="text-[10px] text-[#8b949e] font-medium uppercase tracking-wider">{user?.role === 'admin' ? 'Administrator' : 'Standard'}</div>
+                                <div className="text-xs font-bold text-white tracking-wide">{safeUserName}</div>
+                                <div className="text-[10px] text-[#8b949e] font-medium uppercase tracking-wider">{safeUserRole === 'admin' ? 'Administrator' : 'Standard'}</div>
                             </div>
 
                             <div
