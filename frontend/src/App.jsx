@@ -16,6 +16,46 @@ import StudioPage from './pages/StudioPage';
 import EnterpriseSRS from './pages/EnterpriseSRS';
 import CurriculumPage from './pages/CurriculumPage';
 import ClientReview from './pages/ClientReview';
+import React from 'react';
+
+class AppErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, message: '' };
+  }
+
+  static getDerivedStateFromError(error) {
+    return {
+      hasError: true,
+      message: error?.message || 'Unexpected application error'
+    };
+  }
+
+  componentDidCatch(error, info) {
+    console.error('AppErrorBoundary caught:', error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center p-6">
+          <div className="max-w-xl w-full border border-[#30363d] bg-[#161b22] rounded-xl p-6">
+            <h1 className="text-xl font-bold mb-3">Something went wrong</h1>
+            <p className="text-[#8b949e] text-sm break-words">{this.state.message}</p>
+            <button
+              className="mt-5 px-4 py-2 rounded-lg bg-[#1f6feb] hover:bg-[#388bfd] text-white text-sm font-semibold"
+              onClick={() => window.location.reload()}
+            >
+              Reload
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 const PrivateRoute = ({ children, redirectTo = "/dashboard" }) => {
   const { token, loading } = useAuth();
@@ -28,6 +68,7 @@ function App() {
     <Router>
       <AuthProvider>
         <div className="min-h-screen bg-dark-bg text-white">
+          <AppErrorBoundary>
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/library" element={<Library />} />
@@ -72,6 +113,7 @@ function App() {
               </PrivateRoute>
             } />
           </Routes>
+          </AppErrorBoundary>
         </div>
       </AuthProvider>
     </Router>

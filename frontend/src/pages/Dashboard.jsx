@@ -19,15 +19,19 @@ const Dashboard = () => {
     const [loading, setLoading] = useState(true);
     const normalizeProjects = (raw) => {
         if (!Array.isArray(raw)) return [];
-        return raw.map((project) => ({
-            ...project,
-            _id: String(project?._id || ''),
-            title: typeof project?.title === 'string' ? project.title : (project?.title ? String(project.title) : 'Untitled Project'),
-            domain: typeof project?.domain === 'string' ? project.domain : (project?.domain ? String(project.domain) : 'N/A'),
-            isPublic: Boolean(project?.isPublic),
-            updatedAt: project?.updatedAt || null,
-            techStack: project?.techStack
-        }));
+        return raw
+            .filter((project) => project && typeof project === 'object')
+            .map((project) => ({
+                ...project,
+                _id: String(project?._id || ''),
+                title: typeof project?.title === 'string' ? project.title : (project?.title ? String(project.title) : 'Untitled Project'),
+                domain: typeof project?.domain === 'string' ? project.domain : (project?.domain ? String(project.domain) : 'N/A'),
+                status: typeof project?.status === 'string' ? project.status : '',
+                documentUrl: typeof project?.documentUrl === 'string' ? project.documentUrl : '',
+                isPublic: Boolean(project?.isPublic),
+                updatedAt: project?.updatedAt || null,
+                techStack: project?.techStack
+            }));
     };
 
     const safeText = (value, fallback = 'N/A') => {
@@ -45,6 +49,7 @@ const Dashboard = () => {
 
     const safeUserName = safeText(user?.name, 'User');
     const safeUserRole = typeof user?.role === 'string' ? user.role : 'standard';
+    const safeProfilePic = typeof user?.profilePic === 'string' ? user.profilePic : '';
 
     useEffect(() => {
         console.log("Dashboard mounted. Token:", token ? "Present" : "Missing", "User:", user);
@@ -135,8 +140,8 @@ const Dashboard = () => {
                                 onClick={() => setShowProfile(true)}
                                 className="w-8 h-8 rounded-full bg-[#0d1117] border border-[#30363d] hover:border-[#58a6ff] cursor-pointer flex items-center justify-center overflow-hidden transition-all duration-300"
                             >
-                                {user?.profilePic ? (
-                                    <img src={user.profilePic} alt="Profile" className="w-full h-full object-cover" />
+                                {safeProfilePic ? (
+                                    <img src={safeProfilePic} alt="Profile" className="w-full h-full object-cover" />
                                 ) : (
                                     <User className="text-[#8b949e]" size={16} />
                                 )}
@@ -184,15 +189,15 @@ const Dashboard = () => {
                             <div className="h-px bg-[#30363d] my-2"></div>
                             <div className="flex justify-between items-center">
                                 <span className="text-[#8b949e] flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#e3b341]"></div> In Progress</span>
-                                <span className="text-white font-mono">{projects.filter(p => !['APPROVED', 'IN_REVIEW'].includes(p.status)).length}</span>
+                                <span className="text-white font-mono">{projects.filter(p => p && !['APPROVED', 'IN_REVIEW'].includes(p.status)).length}</span>
                             </div>
                             <div className="flex justify-between items-center">
                                 <span className="text-[#8b949e] flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#ba3c5a]"></div> In Review</span>
-                                <span className="text-white font-mono">{projects.filter(p => p.status === 'IN_REVIEW' || p.status === 'CHANGES_REQUESTED').length}</span>
+                                <span className="text-white font-mono">{projects.filter(p => p && (p.status === 'IN_REVIEW' || p.status === 'CHANGES_REQUESTED')).length}</span>
                             </div>
                             <div className="flex justify-between items-center">
                                 <span className="text-[#8b949e] flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#238636]"></div> Approved</span>
-                                <span className="text-white font-mono">{projects.filter(p => p.status === 'APPROVED').length}</span>
+                                <span className="text-white font-mono">{projects.filter(p => p && p.status === 'APPROVED').length}</span>
                             </div>
                         </div>
 
