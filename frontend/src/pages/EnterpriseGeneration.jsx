@@ -73,10 +73,10 @@ const EnterpriseGeneration = () => {
         }
 
         try {
-            if (mode === 'quick') {
+            if (mode === 'quick' || mode === 'instant') {
                 setStatus('processing');
                 setProgress(0);
-                setMessage("Initializing Generator...");
+                setMessage(mode === 'instant' ? "Generating Basic SRS (Safe Mode)..." : "Initializing Generator...");
                 if (!timerRef.current) {
                     timerRef.current = setInterval(() => setTimer(t => t + 1), 1000);
                 }
@@ -105,7 +105,7 @@ const EnterpriseGeneration = () => {
                 },
                 body: JSON.stringify({
                     projectId: isUpdateFlow ? (existingProjectId || undefined) : undefined,
-                    mode: mode === 'quick' ? 'quick' : 'full',
+                    mode: mode,
                     formData: {
                         ...sanitizedFormData,
                         projectId: isUpdateFlow ? (existingProjectId || undefined) : undefined
@@ -132,12 +132,12 @@ const EnterpriseGeneration = () => {
                 throw new Error(errMessage);
             }
 
-            if (mode === 'quick') {
+            if (mode === 'quick' || mode === 'instant') {
                 setStudioProjectId(data.projectId);
                 setResult({ download_url: data.srs_document_path });
                 setStatus('complete');
                 setProgress(100);
-                setMessage("Quick SRS Ready!");
+                setMessage(mode === 'instant' ? "Safe Mode Generation Complete!" : "Quick SRS Ready!");
                 if (data?.hq?.status === 'BUILDING') {
                     setHqStatus('processing');
                     setHqProgress(15);
@@ -166,7 +166,19 @@ const EnterpriseGeneration = () => {
 
         } catch (err) {
             console.error("Generation Error:", err);
+
+            // Auto-fallback to instant if quick fails
             if (mode === 'quick') {
+                console.warn("Quick mode failed, attempting instant (safe) mode fallback...");
+                setMessage("Standard generation failed. Retrying with Safe Mode...");
+                // Small delay to let user see status change
+                setTimeout(() => {
+                    startGeneration('instant');
+                }, 2000);
+                return;
+            }
+
+            if (mode === 'quick' || mode === 'instant') {
                 setError(err.message);
                 setStatus('error');
                 clearInterval(timerRef.current);
