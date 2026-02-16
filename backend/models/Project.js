@@ -113,6 +113,23 @@ const ProjectSchema = new mongoose.Schema({
         message: String,
         lastError: String,
         lastCheckedAt: Date
+    },
+    reviewCycle: {
+        type: Number,
+        default: 0
+    },
+    reviewActionLocked: {
+        type: Boolean,
+        default: false
+    },
+    reviewActionStatus: {
+        type: String,
+        enum: ['APPROVED', 'CHANGES_REQUESTED', ''],
+        default: ''
+    },
+    reviewActionAt: {
+        type: Date,
+        default: null
     }
 }, {
     timestamps: true,

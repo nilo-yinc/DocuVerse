@@ -76,6 +76,24 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
     const nodeApiBase = normalizeApiBase(import.meta.env.VITE_NODE_API_URL, defaultNodeBase());
     const pythonApiBase = normalizeApiBase(import.meta.env.VITE_PY_API_URL, nodeApiBase);
 
+    const dedupeWorkflowTimeline = (events) => {
+        if (!Array.isArray(events)) return [];
+        const seen = new Set();
+        const out = [];
+        for (const event of events) {
+            if (!event || typeof event !== 'object') continue;
+            const key = [
+                String(event.title || '').trim(),
+                String(event.description || '').trim(),
+                String(event.status || '').trim()
+            ].join('|');
+            if (!key || seen.has(key)) continue;
+            seen.add(key);
+            out.push(event);
+        }
+        return out;
+    };
+
     // const emailLocked = Boolean(clientEmail) && workflowTimeline.some((event) => event.title?.toLowerCase().includes('review'));
     const hasUpdatedDoc = workflowTimeline.some((event) =>
         ['regenerated', 'updated'].some((word) => (event.title || '').toLowerCase().includes(word))
@@ -210,7 +228,7 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
 
     useEffect(() => {
         if (!projectId) return;
-        setWorkflowTimeline(workflowEvents || []);
+        setWorkflowTimeline(dedupeWorkflowTimeline(workflowEvents || []));
     }, [projectId, workflowEvents]);
 
     useEffect(() => {

@@ -359,6 +359,24 @@ const applyDocFromPythonToProject = async (project, pyDownloadUrl) => {
     project.reviewedDocumentUrl = undefined;
 };
 
+const pushWorkflowEventUnique = (project, nextEvent, dedupeWindowMinutes = 15) => {
+    project.workflowEvents = project.workflowEvents || [];
+    const now = Date.now();
+    const cutoff = now - dedupeWindowMinutes * 60 * 1000;
+    const exists = project.workflowEvents.some((event) => {
+        if (!event) return false;
+        const sameTitle = String(event.title || '') === String(nextEvent.title || '');
+        const sameStatus = String(event.status || '') === String(nextEvent.status || '');
+        const sameDescription = String(event.description || '') === String(nextEvent.description || '');
+        const eventTime = new Date(event.date || 0).getTime();
+        const recent = Number.isFinite(eventTime) && eventTime >= cutoff;
+        return sameTitle && sameStatus && sameDescription && recent;
+    });
+    if (!exists) {
+        project.workflowEvents.push(nextEvent);
+    }
+};
+
 // @route   POST /api/projects/save
 // @desc    Create or Update a project
 // @access  Private
@@ -817,8 +835,11 @@ router.post('/:id/send-review', isLoggedIn, async (req, res) => {
         // Update project status
         project.clientEmail = clientEmail;
         project.status = 'IN_REVIEW';
-        project.workflowEvents = project.workflowEvents || [];
-        project.workflowEvents.push({
+        project.reviewCycle = (Number(project.reviewCycle) || 0) + 1;
+        project.reviewActionLocked = false;
+        project.reviewActionStatus = '';
+        project.reviewActionAt = null;
+        pushWorkflowEventUnique(project, {
             date: new Date().toISOString(),
             title: isResend ? 'Review Resent' : 'Review Sent',
             description: `Document sent to ${clientEmail} for review.`,
@@ -936,7 +957,7 @@ router.delete('/:id', isLoggedIn, async (req, res) => {
 // @access  Public
 router.get('/:id/public-review', async (req, res) => {
     try {
-        const project = await Project.findById(req.params.id).select('title status documentUrl reviewFeedback clientEmail');
+        const project = await Project.findById(req.params.id).select('title status documentUrl reviewFeedback clientEmail reviewCycle reviewActionLocked reviewActionStatus reviewActionAt');
         if (!project) return res.status(404).json({ msg: 'Project not found' });
         res.json(project);
     } catch (err) {
@@ -951,13 +972,29 @@ router.get('/:id/public-review', async (req, res) => {
 // @access  Public
 router.post('/:id/submit-review', async (req, res) => {
     try {
+        console.log(`[Review Submission] Project ID: ${req.params.id}`);
         const { status, feedback } = req.body;
+        
         if (!['APPROVED', 'CHANGES_REQUESTED'].includes(status)) {
+            console.warn(`[Review Submission] Invalid status: ${status}`);
             return res.status(400).json({ msg: 'Invalid status' });
         }
 
         const project = await Project.findById(req.params.id);
-        if (!project) return res.status(404).json({ msg: 'Project not found' });
+        if (!project) {
+            console.warn(`[Review Submission] Project not found: ${req.params.id}`);
+            return res.status(404).json({ msg: 'Project not found' });
+        }
+
+        console.log(`[Review Submission] Found project: ${project.title}, Current Status: ${project.status}`);
+
+        if (project.reviewActionLocked) {
+            return res.status(409).json({
+                msg: 'Review already submitted for current cycle',
+                status: project.reviewActionStatus || project.status,
+                submittedAt: project.reviewActionAt || project.updatedAt
+            });
+        }
 
         project.status = status;
         project.reviewFeedback = project.reviewFeedback || [];
@@ -967,46 +1004,61 @@ router.post('/:id/submit-review', async (req, res) => {
         const reviewer = project.clientEmail || 'Client Reviewer';
 
         // Keep backward + forward compatible schema for studio UI
-        project.reviewFeedback.push({
-            id: new Date().getTime().toString(),
-            date: nowIso,
-            source: reviewer,
-            comment: feedbackText,
-            user: reviewer,
-            content: feedbackText,
-            type: status === 'APPROVED' ? 'approval' : 'request_changes'
+        const feedbackType = status === 'APPROVED' ? 'approval' : 'request_changes';
+        const feedbackExists = project.reviewFeedback.some((item) => {
+            if (!item) return false;
+            const sameType = String(item.type || '') === feedbackType;
+            const sameComment = String(item.comment || item.content || '').trim() === String(feedbackText).trim();
+            const itemTime = new Date(item.date || 0).getTime();
+            const recent = Number.isFinite(itemTime) && itemTime >= (Date.now() - 15 * 60 * 1000);
+            return sameType && sameComment && recent;
         });
-        const savedFeedback = project.reviewFeedback[project.reviewFeedback.length - 1];
+        if (!feedbackExists) {
+            project.reviewFeedback.push({
+                id: new Date().getTime().toString(),
+                date: nowIso,
+                source: reviewer,
+                comment: feedbackText,
+                user: reviewer,
+                content: feedbackText,
+                type: feedbackType
+            });
+        }
+        const savedFeedback = project.reviewFeedback[project.reviewFeedback.length - 1] || null;
 
-        project.workflowEvents = project.workflowEvents || [];
         if (status === 'APPROVED') {
-            project.workflowEvents.push({
+            pushWorkflowEventUnique(project, {
                 date: nowIso,
                 title: 'Approved',
                 description: 'Client approved the document.',
                 status: 'APPROVED'
             });
         } else {
-            project.workflowEvents.push({
+            pushWorkflowEventUnique(project, {
                 date: nowIso,
                 title: 'Changes Requested',
                 description: 'Client requested changes.',
                 status: 'CHANGES_REQUESTED'
             });
-            project.workflowEvents.push({
+            pushWorkflowEventUnique(project, {
                 date: nowIso,
                 title: 'Feedback Received',
                 description: 'Client submitted feedback.',
                 status: 'CHANGES_REQUESTED'
             });
         }
+        project.reviewActionLocked = true;
+        project.reviewActionStatus = status;
+        project.reviewActionAt = new Date();
 
+        console.log('[Review Submission] Saving project...');
         await project.save();
+        console.log('[Review Submission] Project saved successfully.');
 
-        // Best-effort sync into Python store so workflow/regenerate flow stays aligned.
-        try {
-            const pyBase = getPyBase();
-            await callPythonWithRetry(() => axios.post(`${pyBase}/api/project/create`, {
+        // Fire-and-forget sync so client gets immediate success.
+        const pyBase = getPyBase();
+        setImmediate(() => {
+            callPythonWithRetry(() => axios.post(`${pyBase}/api/project/create`, {
                 id: project._id.toString(),
                 name: project.title || 'DocuVerse Project',
                 content: project.contentMarkdown || buildMarkdownFromSrsRequest(project.enterpriseData || {}),
@@ -1016,10 +1068,10 @@ router.post('/:id/submit-review', async (req, res) => {
                 clientEmail: project.clientEmail || undefined,
                 workflowEvents: project.workflowEvents || [],
                 reviewFeedback: project.reviewFeedback || []
-            }, { timeout: 45000 }), 1);
-        } catch (syncErr) {
-            console.warn('Public review sync warning:', syncErr?.message || syncErr);
-        }
+            }, { timeout: 45000 }), 1).catch((syncErr) => {
+                console.warn('Public review sync warning:', syncErr?.message || syncErr);
+            });
+        });
 
         res.json({
             msg: 'Review submitted successfully',
@@ -1029,8 +1081,15 @@ router.post('/:id/submit-review', async (req, res) => {
         });
 
     } catch (err) {
-        console.error(err);
-        res.status(500).send('Server Error');
+        console.error('Submit Review Error:', err);
+        if (err.kind === 'ObjectId') return res.status(404).json({ msg: 'Project not found' });
+        
+        // Return actual error details for debugging
+        res.status(500).json({ 
+            msg: 'Server Error during review submission', 
+            error: err.message,
+            stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+        });
     }
 });
 

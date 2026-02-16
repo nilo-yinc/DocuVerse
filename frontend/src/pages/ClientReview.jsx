@@ -12,6 +12,7 @@ const ClientReview = () => {
     const [feedback, setFeedback] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [reviewReceipt, setReviewReceipt] = useState(null);
+    const [alreadySubmitted, setAlreadySubmitted] = useState(false);
 
     // Dynamic API base URL based on environment
     const apiBase = import.meta.env.VITE_API_URL || 'https://docuverse-node.onrender.com';
@@ -24,6 +25,7 @@ const ClientReview = () => {
         try {
             const res = await axios.get(`${apiBase}/api/projects/${id}/public-review`);
             setProject(res.data);
+            setAlreadySubmitted(Boolean(res.data?.reviewActionLocked));
             setLoading(false);
         } catch (err) {
             console.error(err);
@@ -50,10 +52,17 @@ const ClientReview = () => {
                 text: res.data?.feedback?.comment || res.data?.feedback?.content || (status === 'APPROVED' ? 'Approved by client.' : feedback)
             });
             setAction('SUCCESS');
+            setAlreadySubmitted(true);
             fetchProject(); // Refresh status
         } catch (err) {
             console.error(err);
-            alert('Failed to submit review. Please try again.');
+            if (err?.response?.status === 409) {
+                setAlreadySubmitted(true);
+                alert('This review link was already used for this review cycle.');
+                fetchProject();
+            } else {
+                alert('Failed to submit review. Please try again.');
+            }
         } finally {
             setSubmitting(false);
         }
@@ -75,7 +84,7 @@ const ClientReview = () => {
         </div>
     );
 
-    if (action === 'SUCCESS' || project.status === 'APPROVED') return (
+    if (action === 'SUCCESS' || project.status === 'APPROVED' || alreadySubmitted) return (
         <div className="min-h-screen bg-[#0d1117] flex items-center justify-center text-white p-4">
             <div className="max-w-md w-full bg-[#161b22] border border-[#30363d] rounded-xl p-8 text-center">
                 <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-6" />
