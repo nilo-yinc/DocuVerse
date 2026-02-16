@@ -976,6 +976,7 @@ router.post('/:id/submit-review', async (req, res) => {
             content: feedbackText,
             type: status === 'APPROVED' ? 'approval' : 'request_changes'
         });
+        const savedFeedback = project.reviewFeedback[project.reviewFeedback.length - 1];
 
         project.workflowEvents = project.workflowEvents || [];
         if (status === 'APPROVED') {
