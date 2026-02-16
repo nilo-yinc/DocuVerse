@@ -97,6 +97,16 @@ const EnterpriseGeneration = () => {
                 delete sanitizedFormData.projectId;
             }
 
+            // Robust ID Resolution: Check existing sources, then fallback to localStorage
+            let finalProjectId = isUpdateFlow ? (existingProjectId || undefined) : undefined;
+            if (!finalProjectId) {
+                const storedId = localStorage.getItem('autoSRS_activeProjectId');
+                if (storedId && storedId !== 'null' && storedId !== 'undefined') {
+                    console.warn("Generation: Recovered missing Project ID from storage:", storedId);
+                    finalProjectId = storedId;
+                }
+            }
+
             const response = await fetch(genUrl, {
                 method: 'POST',
                 headers: {
@@ -104,11 +114,11 @@ const EnterpriseGeneration = () => {
                     'Authorization': `Bearer ${resolvedToken}`
                 },
                 body: JSON.stringify({
-                    projectId: isUpdateFlow ? (existingProjectId || undefined) : undefined,
+                    projectId: finalProjectId,
                     mode: mode,
                     formData: {
                         ...sanitizedFormData,
-                        projectId: isUpdateFlow ? (existingProjectId || undefined) : undefined
+                        projectId: finalProjectId
                     }
                 })
             });
