@@ -276,4 +276,163 @@ const updateProfile = async (req, res) => {
   }
 };
 
-module.exports = { registerUser, login, getProfile, logout, updateProfile };
+// ─── Google OAuth (OpenID Connect) ───────────────────────────────────────────
+
+const crypto = require("crypto");
+const axios = require("axios");
+const jwksClient = require("jwks-rsa");
+
+const generateState = () => crypto.randomBytes(32).toString("hex");
+const generateNonce = () => crypto.randomBytes(32).toString("hex");
+
+const getJwksClient = () => {
+  return jwksClient({
+    jwksUri: process.env.GOOGLE_JWKS_URL || "https://www.googleapis.com/oauth2/v3/certs",
+    cache: true,
+    rateLimit: true,
+  });
+};
+
+const getSigningKey = async (kid) => {
+  const client = getJwksClient();
+  return new Promise((resolve, reject) => {
+    client.getSigningKey(kid, (err, key) => {
+      if (err) return reject(err);
+      resolve(key.getPublicKey());
+    });
+  });
+};
+
+const verifyGoogleToken = async (token) => {
+  const decoded = jwt.decode(token, { complete: true });
+  if (!decoded) throw new Error("Invalid token");
+  const signingKey = await getSigningKey(decoded.header.kid);
+  return jwt.verify(token, signingKey, {
+    algorithms: ["RS256"],
+    audience: process.env.GOOGLE_CLIENT_ID,
+  });
+};
+
+// Step 1: Redirect user to Google consent screen
+const googleLogin = (req, res) => {
+  const state = generateState();
+  const nonce = generateNonce();
+
+  const cookieOpts = {
+    httpOnly: true,
+    maxAge: 600000,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  };
+  res.cookie("oauth_state", state, cookieOpts);
+  res.cookie("oauth_nonce", nonce, cookieOpts);
+
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI;
+  const googleAuthUrl =
+    `https://accounts.google.com/o/oauth2/v2/auth` +
+    `?client_id=${process.env.GOOGLE_CLIENT_ID}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&response_type=code` +
+    `&scope=email%20profile%20openid` +
+    `&state=${state}` +
+    `&nonce=${nonce}` +
+    `&access_type=offline` +
+    `&prompt=consent`;
+
+  res.redirect(googleAuthUrl);
+};
+
+// Step 2: Handle Google callback
+const googleCallback = async (req, res) => {
+  try {
+    const { code, state } = req.query;
+    const savedState = req.cookies.oauth_state;
+    const savedNonce = req.cookies.oauth_nonce;
+
+    res.clearCookie("oauth_state");
+    res.clearCookie("oauth_nonce");
+
+    if (!state || !savedState || state !== savedState) {
+      return res.status(401).json({ status: false, message: "Invalid state parameter" });
+    }
+
+    // Exchange code for tokens
+    const tokenResponse = await axios.post(
+      "https://oauth2.googleapis.com/token",
+      null,
+      {
+        params: {
+          client_id: process.env.GOOGLE_CLIENT_ID,
+          client_secret: process.env.GOOGLE_CLIENT_SECRET,
+          redirect_uri: process.env.GOOGLE_REDIRECT_URI,
+          code,
+          grant_type: "authorization_code",
+        },
+      }
+    );
+
+    const { id_token } = tokenResponse.data;
+    if (!id_token) {
+      return res.status(401).json({ status: false, message: "No ID token received" });
+    }
+
+    // Verify the ID token with JWKS
+    const decodedToken = await verifyGoogleToken(id_token);
+    if (!decodedToken) {
+      return res.status(401).json({ status: false, message: "Invalid ID token" });
+    }
+
+    // Validate nonce
+    if (!decodedToken.nonce || decodedToken.nonce !== savedNonce) {
+      return res.status(401).json({ status: false, message: "Invalid nonce" });
+    }
+
+    // Find or create user
+    let user = await User.findOne({ googleId: decodedToken.sub });
+    if (!user) {
+      // Also check by email so existing users can link their Google account
+      user = await User.findOne({ email: decodedToken.email });
+      if (user) {
+        // Link Google ID to existing user
+        user.googleId = decodedToken.sub;
+        if (!user.profilePic && decodedToken.picture) user.profilePic = decodedToken.picture;
+        await user.save();
+      } else {
+        // Create new user
+        user = await User.create({
+          googleId: decodedToken.sub,
+          email: decodedToken.email,
+          name: decodedToken.name || decodedToken.email.split("@")[0],
+          profilePic: decodedToken.picture || "",
+        });
+      }
+    }
+
+    // Generate JWT (same format as existing login)
+    const jwtToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+      expiresIn: process.env.JWT_EXPIRY || "24h",
+    });
+
+    // Set cookie
+    const cookieOptions = {
+      expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      path: "/",
+    };
+    res.cookie("jwtToken", jwtToken, cookieOptions);
+
+    // Redirect to frontend with token in URL (frontend will parse it)
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    return res.redirect(
+      `${frontendUrl}/auth/google/callback?token=${jwtToken}&name=${encodeURIComponent(user.name)}&email=${encodeURIComponent(user.email)}&id=${user._id}`
+    );
+  } catch (error) {
+    console.error("Google OAuth Callback Error:", error.response?.data || error.message);
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    return res.redirect(`${frontendUrl}/login?error=google_auth_failed`);
+  }
+};
+
+module.exports = { registerUser, login, getProfile, logout, updateProfile, googleLogin, googleCallback };
