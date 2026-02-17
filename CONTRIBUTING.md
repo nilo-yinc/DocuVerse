@@ -1,6 +1,6 @@
-# Contributing to AutoSRS
+# Contributing to DocuVerse
 
-Thank you for considering contributing to AutoSRS! 🎉
+Thank you for considering contributing to DocuVerse! 🎉
 
 ## How to Contribute
 
@@ -10,7 +10,7 @@ If you find a bug, please create an issue with:
 - Clear description of the problem
 - Steps to reproduce
 - Expected vs actual behavior
-- Environment details (OS, Python version, etc.)
+- Environment details (OS, Node.js version, Python version, etc.)
 
 ### Suggesting Features
 
@@ -32,12 +32,21 @@ Feature requests are welcome! Please provide:
    - Update documentation if needed
 4. **Test your changes**
    ```bash
-   # Test the server
-   uvicorn srs_engine.main:app --reload
+   # Test the Node.js backend
+   cd backend
+   npm run dev
+   
+   # Test the Python service
+   cd backend/beta
+   uvicorn main:app --reload
+   
+   # Test the frontend
+   cd frontend
+   npm run dev
    ```
 5. **Commit with descriptive messages**
    ```bash
-   git commit -m "Add: Brief description of changes"
+   git commit -m "feat: brief description of changes"
    ```
 6. **Push to your fork**
    ```bash
@@ -50,40 +59,57 @@ Feature requests are welcome! Please provide:
 ## Development Setup
 
 ```bash
-# Navigate to project
-cd AutoSRS
+# Clone the repository
+git clone https://github.com/nilo-yinc/DocuVerse.git
+cd DocuVerse
 
-# Create virtual environment
+# Backend (Node.js)
+cd backend
+npm install
+
+# Backend (Python)
+cd backend/beta
 python -m venv venv
 source venv/bin/activate  # or venv\Scripts\activate on Windows
-
-# Install dependencies
 pip install -r requirements.txt
 npm install -g @mermaid-js/mermaid-cli
 
+# Frontend
+cd frontend
+npm install
+
 # Configure environment
 cp .env.example .env
-# Edit .env with your API keys
+# Edit .env with your API keys and MongoDB connection
 
-# Run server
-uvicorn srs_engine.main:app --reload
+# Run all services (separate terminals)
+# Terminal 1: Node backend
+cd backend && npm run dev
+
+# Terminal 2: Python backend
+cd backend/beta && uvicorn main:app --reload
+
+# Terminal 3: Frontend
+cd frontend && npm run dev
 ```
 
 ## Code Style
 
-- Follow PEP 8 for Python code
+- **JavaScript/React**: Follow ESLint configuration
+- **Python**: Follow PEP 8 for Python code
 - Use meaningful variable and function names
-- Add docstrings for functions and classes
+- Add docstrings/JSDoc for functions and classes
 - Keep functions focused and small
 
 ## Areas for Contribution
 
-- **New AI Providers:** Add support for more LLM providers
-- **UI Improvements:** Enhance the web interface
-- **Documentation:** Improve guides and examples
-- **Testing:** Add unit and integration tests
-- **Performance:** Optimize agent execution
-- **Diagram Types:** Support more Mermaid diagram types
+- **New AI Providers**: Add support for more LLM providers
+- **UI Improvements**: Enhance the web interface and studio editor
+- **Documentation**: Improve guides and examples
+- **Testing**: Add unit and integration tests
+- **Performance**: Optimize agent execution and API response times
+- **Diagram Types**: Support more Mermaid diagram types
+- **Mobile Support**: Improve responsive design
 
 ## Questions?
 
@@ -91,4 +117,4 @@ Feel free to open an issue for questions or join discussions!
 
 ---
 
-**Happy Coding! 🚀**
+**Happy Coding!**
