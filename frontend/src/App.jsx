@@ -16,6 +16,7 @@ import StudioPage from './pages/StudioPage';
 import EnterpriseSRS from './pages/EnterpriseSRS';
 import CurriculumPage from './pages/CurriculumPage';
 import ClientReview from './pages/ClientReview';
+import GoogleCallback from './pages/GoogleCallback';
 import React from 'react';
 
 class AppErrorBoundary extends React.Component {
@@ -69,50 +70,51 @@ function App() {
       <AuthProvider>
         <div className="min-h-screen bg-dark-bg text-white">
           <AppErrorBoundary>
-          <Routes>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/library" element={<Library />} />
-            <Route path="/library/:modelId" element={<ModelSimulation />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/demo/:id" element={<Demo />} />
-            <Route path="/studio" element={<Navigate to="/studio/demo" />} />
-            <Route path="/studio/:id" element={<StudioPage />} />
-            <Route path="/system-design" element={<SystemDesignPlayground />} />
-            <Route path="/curriculum" element={<CurriculumPage />} />
-            <Route path="/review/:id" element={<ClientReview />} />
+            <Routes>
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/library" element={<Library />} />
+              <Route path="/library/:modelId" element={<ModelSimulation />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/auth/google/callback" element={<GoogleCallback />} />
+              <Route path="/demo/:id" element={<Demo />} />
+              <Route path="/studio" element={<Navigate to="/studio/demo" />} />
+              <Route path="/studio/:id" element={<StudioPage />} />
+              <Route path="/system-design" element={<SystemDesignPlayground />} />
+              <Route path="/curriculum" element={<CurriculumPage />} />
+              <Route path="/review/:id" element={<ClientReview />} />
 
-            {/* Authentication Pages */}
-            <Route path="/enterprise/access" element={<EnterpriseAccess />} />
-            <Route path="/student/access" element={<StudentAccess />} />
-            <Route path="/student/coming-soon" element={
-              <PrivateRoute redirectTo="/student/access">
-                <StudentComingSoon />
-              </PrivateRoute>
-            } />
+              {/* Authentication Pages */}
+              <Route path="/enterprise/access" element={<EnterpriseAccess />} />
+              <Route path="/student/access" element={<StudentAccess />} />
+              <Route path="/student/coming-soon" element={
+                <PrivateRoute redirectTo="/student/access">
+                  <StudentComingSoon />
+                </PrivateRoute>
+              } />
 
-            {/* Protected Routes - Require Authentication */}
-            <Route path="/enterprise/form" element={
-              <PrivateRoute redirectTo="/enterprise/access">
-                <EnterpriseSRS />
-              </PrivateRoute>
-            } />
-            <Route path="/enterprise/generation" element={
-              <PrivateRoute redirectTo="/enterprise/access">
-                <EnterpriseGeneration />
-              </PrivateRoute>
-            } />
-            <Route path="/enterprise/srs" element={
-              <PrivateRoute redirectTo="/enterprise/access">
-                <EnterpriseSRS />
-              </PrivateRoute>
-            } />
-            <Route path="/wizard" element={
-              <PrivateRoute>
-                <Wizard />
-              </PrivateRoute>
-            } />
-          </Routes>
+              {/* Protected Routes - Require Authentication */}
+              <Route path="/enterprise/form" element={
+                <PrivateRoute redirectTo="/enterprise/access">
+                  <EnterpriseSRS />
+                </PrivateRoute>
+              } />
+              <Route path="/enterprise/generation" element={
+                <PrivateRoute redirectTo="/enterprise/access">
+                  <EnterpriseGeneration />
+                </PrivateRoute>
+              } />
+              <Route path="/enterprise/srs" element={
+                <PrivateRoute redirectTo="/enterprise/access">
+                  <EnterpriseSRS />
+                </PrivateRoute>
+              } />
+              <Route path="/wizard" element={
+                <PrivateRoute>
+                  <Wizard />
+                </PrivateRoute>
+              } />
+            </Routes>
           </AppErrorBoundary>
         </div>
       </AuthProvider>
