@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="frontend/public/logo.svg" alt="DocuVerse Logo" width="120" height="120" />
+
 # DocuVerse
 
 ![Node.js](https://img.shields.io/badge/Node.js-18+-green?logo=node.js)
