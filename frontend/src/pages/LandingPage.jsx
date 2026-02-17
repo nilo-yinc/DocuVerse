@@ -145,12 +145,12 @@ const LandingPage = () => {
                                         <div className="w-3 h-3 rounded-full bg-[#ff5f56]"></div>
                                         <div className="w-3 h-3 rounded-full bg-[#ffbd2e]"></div>
                                         <div className="w-3 h-3 rounded-full bg-[#27c93f]"></div>
-                                        <div className="ml-4 text-xs text-[#8b949e]">niloy@dev:~/autosrs</div>
+                                        <div className="ml-4 text-xs text-[#8b949e]">niloy@dev:~/docuverse</div>
                                     </div>
                                     {/* Terminal Body */}
                                     <div className="p-6 text-[#c9d1d9] space-y-2">
                                         <div>
-                                            <span className="text-[#79c0ff]">➜</span> <span className="text-[#7ee787]">~</span> <span className="text-[#c9d1d9]">autosrs analyze --input "Hospital System"</span>
+                                            <span className="text-[#79c0ff]">➜</span> <span className="text-[#7ee787]">~</span> <span className="text-[#c9d1d9]">docuverse analyze --input "Hospital System"</span>
                                         </div>
                                         <div className="text-[#8b949e] pl-4">
                                             Analyzing requirements... <span className="text-[#7ee787]">Done</span><br />
@@ -158,7 +158,7 @@ const LandingPage = () => {
                                             Generaring UML diagrams... <span className="text-[#7ee787]">Done</span>
                                         </div>
                                         <div className="mt-4">
-                                            <span className="text-[#79c0ff]">➜</span> <span className="text-[#7ee787]">~</span> <span className="text-[#c9d1d9]">autosrs generate --mode high-quality</span>
+                                            <span className="text-[#79c0ff]">➜</span> <span className="text-[#7ee787]">~</span> <span className="text-[#c9d1d9]">docuverse generate --mode high-quality</span>
                                         </div>
                                         <div className="text-[#8b949e] pl-4">
                                             Rendering IEEE 830-1998... <span className="text-[#7ee787]">Success</span><br />
