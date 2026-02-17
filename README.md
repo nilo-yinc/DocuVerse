@@ -1,263 +1,370 @@
-# 🚀 AutoSRS - AI-Powered SRS Generator
-
 <div align="center">
 
-![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
-![FastAPI](https://img.shields.io/badge/FastAPI-latest-green.svg)
+# 🚀 DocuVerse
 
-![Gemini](https://img.shields.io/badge/Gemini-Pro-orange.svg)
+![Node.js](https://img.shields.io/badge/Node.js-18+-green?logo=node.js)
+![React](https://img.shields.io/badge/React-18+-blue?logo=react)
+![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python)
+![FastAPI](https://img.shields.io/badge/FastAPI-latest-teal?logo=fastapi)
+![MongoDB](https://img.shields.io/badge/MongoDB-latest-green?logo=mongodb)
+![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-**AI-powered automated Software Requirements Specification (SRS) document generator with architecture diagrams**
+**AI-Powered Software Requirements Specification (SRS) Generator & Interactive Documentation Studio**
 
-Generate professional IEEE 830-1998 compliant SRS documents in 30-90 seconds!
+[Live Demo](https://docu-verse-ai.vercel.app) • [Documentation](#-documentation) • [Contributing](#-contributing)
 
 </div>
 
 ---
 
-## 🎯 Overview
+## 📖 Overview
 
-An intelligent multi-agent system that automates SRS creation using **Google Gemini AI**. Built with FastAPI, it generates professional IEEE 830-1998 compliant documents complete with Mermaid diagrams - all in minutes!
+**DocuVerse** is a full-stack MERN platform that revolutionizes technical documentation creation. Combining the power of Google Gemini AI with an intuitive visual studio, DocuVerse generates professional, IEEE 830-compliant SRS documents in under 60 seconds—complete with architecture diagrams, use cases, and interactive editing capabilities.
 
-**Key Features:**
-- 🤖 7 Specialized AI agents for different SRS sections
-- ⚡ Powered by Google Gemini's advanced AI
-- 📄 Professional `.docx` output with architecture diagrams
-- 🆓 100% Free - No billing required
-- 🔒 Runs locally - Your data stays private
+### ✨ Key Features
 
----
-
-## 📸 Screenshots
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/b67b8d09-3e0d-48f5-b6d4-2b55751b8b85" />
-
-
----
+- 🤖 **AI-Powered Generation**: 7 specialized AI agents working in parallel to create comprehensive SRS documents
+- ⚡ **Lightning Fast**: Generate complete documentation in 30-90 seconds
+- 🎨 **Visual Studio**: Interactive editing environment with real-time preview
+- 📊 **Auto-Generated Diagrams**: System context, use case, sequence, and architecture diagrams
+- 🔐 **Secure Authentication**: Google OAuth & JWT-based auth with session management
+- 📱 **Responsive Design**: Beautiful dark-mode UI optimized for all devices
+- 💾 **Cloud Storage**: MongoDB-based persistence with GridFS for large documents
+- 🎯 **Multi-Mode Generation**: Quick, Standard, and Enterprise-grade documentation levels
+- 🔄 **Version Control**: Track document revisions and workflow history
+- 📧 **Client Collaboration**: Share documents for review with stakeholders
 
 ---
 
-## 📦 Prerequisites
+## 🎯 Use Cases
 
-| Requirement | Version | Download |
-|------------|---------|----------|
-| Python | 3.10+ | [Download](https://www.python.org/downloads/) |
-| Node.js | Latest LTS | [Download](https://nodejs.org/) |
-| Git | Latest | [Download](https://git-scm.com/downloads/) |
-| Gemini API Key | Free | [Get Key](https://aistudio.google.com/app/apikey) |
+- **Startups**: Rapidly prototype and document new product ideas
+- **Developers**: Auto-generate technical specs from feature descriptions
+- **Product Managers**: Create comprehensive requirement documents
+- **Students**: Learn software engineering best practices
+- **Enterprises**: Maintain consistent documentation standards
 
 ---
 
-## 🛠 Installation
+## 🛠 Tech Stack
 
-### Step 1: Setup Project
-```bash
-cd AutoSRS
-```
+### Frontend
+- **React 18** - Modern UI framework
+- **Vite** - Fast build tooling
+- **TailwindCSS** - Utility-first styling
+- **Framer Motion** - Smooth animations
+- **Axios** - HTTP client
 
-### Step 2: Create Virtual Environment
+### Backend (Node.js)
+- **Express.js** - Web framework
+- **MongoDB + Mongoose** - Database & ODM
+- **JWT** - Authentication
+- **Passport (Google OAuth)** - Social login
+- **Nodemailer** - Email notifications
 
-**Windows:**
-```bash
-python -m venv venv
-venv\Scripts\activate
-```
+### Backend (Python)
+- **FastAPI** - High-performance API framework
+- **Google Gemini AI** - Advanced language model
+- **python-docx** - DOCX generation
+- **Mermaid** - Diagram rendering
+- **Pydantic** - Data validation
 
-**macOS/Linux:**
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
+### Deployment
+- **Vercel** - Frontend hosting
+- **Render** - Backend services
+- **MongoDB Atlas** - Cloud database
 
-> 💡 You'll see `(venv)` in your terminal when activated
+---
 
-### Step 3: Install Python Dependencies
-```bash
-pip install --upgrade pip
-pip install -r requirements.txt
-```
+## 🚀 Quick Start
 
-### Step 4: Install Mermaid CLI
-```bash
-npm install -g @mermaid-js/mermaid-cli
-mmdc --version  # Verify installation
-```
+### Prerequisites
 
-> **⚠️ CRITICAL for Windows Users**: After installation, you **MUST** configure the Mermaid CLI path in the code.
+| Tool | Version | Purpose |
+|------|---------|---------|
+| Node.js | 18+ | Backend & Frontend |
+| Python | 3.10+ | AI Engine |
+| MongoDB | 5+ | Database |
+| Git | Latest | Version Control |
 
-**Windows Configuration:**
-1. Locate your Mermaid CLI installation path (typically):
-   ```
-   C:\Users\<Your Username>\AppData\Roaming\npm\mmdc.cmd
-   ```
+### Installation
 
-2. Open `srs_engine/utils/globals.py` and update the `render_mermaid_png` function:
-   ```python
-   # Find the subprocess.run line and update it to:
-   subprocess.run([
-       "C:\\Users\\<Your Username>\\AppData\\Roaming\\npm\\mmdc.cmd",
-       "-i", str(mmd_path),
-       "-o", str(output_path)
-   ], check=True)
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/nilo-yinc/DocuVerse.git
+   cd DocuVerse
    ```
 
-3. Replace `<Your Username>` with your actual Windows username
+2. **Set up environment variables**
+   ```bash
+   # Create .env file in root directory
+   cp .env.example .env
+   ```
 
-**Without this configuration, diagram generation will fail on Windows!**
+   **Required Environment Variables:**
+   ```ini
+   # MongoDB
+   MONGO_URI=your_mongodb_connection_string
 
----
+   # Google Gemini AI
+   GEMINI_API_KEY=your_gemini_api_key
 
-## ⚙️ Configuration
+   # JWT Secret
+   JWT_SECRET=your_secure_random_string
+   JWT_EXPIRY=24h
 
-### 1. Get Your Free Gemini API Key
-1. Visit [Google AI Studio](https://aistudio.google.com/app/apikey)
-2. Sign in with your Google account
-3. Click "Get API Key" or "Create API Key"
-4. Copy your key
+   # Google OAuth (Optional)
+   GOOGLE_CLIENT_ID=your_google_client_id
+   GOOGLE_CLIENT_SECRET=your_google_client_secret
+   GOOGLE_REDIRECT_URI=http://localhost:5000/api/v1/users/google/callback
 
-### 2. Create `.env` File
+   # Frontend URL
+   FRONTEND_URL=http://localhost:5173
 
-**Windows:**
-```bash
-type nul > .env
-```
+   # Email (Optional - for notifications)
+   EMAIL_USER=your_email@gmail.com
+   EMAIL_PASS=your_app_password
+   ```
 
-**macOS/Linux:**
-```bash
-touch .env
-```
+3. **Install dependencies**
 
-### 3. Add Configuration
+   **Backend (Node.js):**
+   ```bash
+   cd backend
+   npm install
+   ```
 
-Open `.env` and add:
+   **Backend (Python):**
+   ```bash
+   cd backend/beta
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   pip install -r requirements.txt
+   ```
 
-```ini
-# Gemini API Key (Required)
-GEMINI_API_KEY=your_actual_api_key_here
+   **Frontend:**
+   ```bash
+   cd frontend
+   npm install
+   ```
 
-# Model Selection (Optional - defaults to gemini-2.0-flash-exp)
-GEMINI_MODEL=gemini-2.0-flash-exp
-```
+4. **Install Mermaid CLI (for diagrams)**
+   ```bash
+   npm install -g @mermaid-js/mermaid-cli
+   ```
 
-**Available Models:** [Gemini Models Docs](https://ai.google.dev/gemini-api/docs/models)
+5. **Start the development servers**
 
-| Model | Name | Best For |
-|-------|------|----------|
-| Gemini 2.0 Flash | `gemini-2.0-flash-exp` | ⭐ Recommended - Fast & Accurate |
-| Gemini 1.5 Pro | `gemini-1.5-pro` | High Quality & Complex Tasks |
-| Gemini 1.5 Flash | `gemini-1.5-flash` | Speed Optimized |
+   **Terminal 1 - Node Backend:**
+   ```bash
+   cd backend
+   npm run dev
+   ```
 
----
+   **Terminal 2 - Python Backend:**
+   ```bash
+   cd backend/beta
+   uvicorn main:app --reload --port 8000
+   ```
 
-## 🚀 Usage
+   **Terminal 3 - Frontend:**
+   ```bash
+   cd frontend
+   npm run dev
+   ```
 
-### 1. Start Server
-```bash
-uvicorn srs_engine.main:app --reload
-```
-
-### 2. Open Web Interface
-Navigate to: **http://127.0.0.1:8000**
-
-### 3. Enter Project Details
-Fill in the form:
-- Project Name
-- Project Description
-- Key Features
-- Target Users
-- Technology Stack (optional)
-
-### 4. Generate SRS
-Click "Generate SRS" and wait 2-5 minutes
-
-### 5. Access Generated Files
-
-**SRS Document:**
-```
-srs_engine/generated_srs/{project_name}_SRS.docx
-```
-
-**Architecture Diagrams:**
-```
-srs_engine/static/{project_name}_user_interfaces_diagram.png
-srs_engine/static/{project_name}_hardware_interfaces_diagram.png
-srs_engine/static/{project_name}_software_interfaces_diagram.png
-srs_engine/static/{project_name}_communication_interfaces_diagram.png
-```
-
----
-
-## 🔧 Troubleshooting
-
-**`mmdc: command not found`**
-```bash
-npm install -g @mermaid-js/mermaid-cli
-# Add Node.js to PATH if needed
-```
-
-**`ModuleNotFoundError`**
-```bash
-# Activate venv first!
-pip install -r requirements.txt
-```
-
-**API Key Error (401)**
-- Verify key at [Google AI Studio](https://aistudio.google.com/app/apikey)
-- Check `.env` is in root directory
-- No spaces/quotes around the key
-
-**Port 8000 in use**
-```bash
-uvicorn srs_engine.main:app --reload --port 8001
-```
-
-**Diagrams not generating (Windows)**
-```bash
-# ⚠️ CRITICAL: Windows users must configure mmdc path
-# Open srs_engine/utils/globals.py
-# Find render_mermaid_png function and update subprocess.run to:
-
-subprocess.run([
-    "C:\\Users\\<Your Username>\\AppData\\Roaming\\npm\\mmdc.cmd",
-    "-i", str(mmd_path),
-    "-o", str(output_path)
-], check=True)
-
-# Replace <Your Username> with your actual Windows username
-# Without this, mmdc won't be found even if installed correctly
-```
+6. **Access the application**
+   - Frontend: `http://localhost:5173`
+   - Node API: `http://localhost:5000`
+   - Python API: `http://localhost:8000`
 
 ---
 
 ## 📁 Project Structure
 
 ```
-SRS_Generation/
-├── srs_engine/
-│   ├── agents/              # 7 specialized AI agents
-│   ├── schemas/             # Pydantic models
-│   ├── utils/               # Document generator
-│   ├── templates/           # Web interface
-│   ├── static/              # Generated diagrams
-│   ├── generated_srs/       # Output documents
-│   └── main.py              # FastAPI app
-├── .env                     # Your configuration
-├── requirements.txt         # Dependencies
+DocuVerse/
+├── frontend/                 # React + Vite frontend
+│   ├── src/
+│   │   ├── components/      # Reusable UI components
+│   │   ├── pages/           # Page components
+│   │   ├── context/         # React Context (Auth, etc.)
+│   │   ├── hooks/           # Custom React hooks
+│   │   └── utils/           # Utility functions
+│   └── package.json
+│
+├── backend/                 # Node.js + Express backend
+│   ├── routes/             # API route handlers
+│   ├── controllers/        # Business logic
+│   ├── models/             # Mongoose schemas
+│   ├── middlewares/        # Auth & validation
+│   ├── config/             # DB connection
+│   ├── utils/              # Helper functions
+│   ├── beta/               # Python FastAPI service
+│   │   ├── agents/         # 7 AI agents
+│   │   ├── schemas/        # Pydantic models
+│   │   ├── services/       # Business logic
+│   │   ├── utils/          # DOCX generation
+│   │   └── main.py         # FastAPI app
+│   └── server.js
+│
+├── .env                    # Environment variables (create this)
+├── .env.example            # Example env file
+├── render.yaml             # Render deployment config
 └── README.md
 ```
 
 ---
 
-## 🤝 Contributing
+## 🎨 Features in Detail
 
-Contributions welcome! Please:
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/name`)
-3. Commit changes (`git commit -m 'Add feature'`)
-4. Push to branch (`git push origin feature/name`)
-5. Open Pull Request
+### 1. **Intelligent SRS Generation**
+- Multi-agent AI system with specialized roles (Requirements, Architecture, UI/UX, Security, etc.)
+- Context-aware generation based on domain, tech stack, and project requirements
+- Automatic diagram creation (Context, Use Case, Sequence, Architecture)
+
+### 2. **Interactive Studio**
+- Real-time document preview
+- Section-by-section editing
+- Markdown support
+- Diagram regeneration
+- Export to DOCX
+
+### 3. **Authentication & Security**
+- JWT-based session management
+- Google OAuth integration
+- Password reset via OTP
+- Secure cookie handling
+- Auto-logout on token expiration
+
+### 4. **Client Collaboration**
+- Share documents via secure links
+- Email notifications
+- Public review mode (no login required)
+- Feedback collection
+
+### 5. **Project Dashboard**
+- Manage multiple SRS documents
+- Track generation history
+- Quick actions (Edit, Download, Delete)
+- Search and filter projects
 
 ---
 
-## � Acknowledgments
+## 🤝 Contributing
 
-Built with: [FastAPI](https://fastapi.tiangolo.com/) • [Google Gemini](https://ai.google.dev/) • [Mermaid](https://mermaid.js.org/) • [python-docx](https://python-docx.readthedocs.io/)
+We welcome contributions from the community! Here's how you can help:
+
+### Ways to Contribute
+- 🐛 **Report Bugs**: Open an issue with detailed steps to reproduce
+- 💡 **Suggest Features**: Share your ideas in the discussions
+- 📝 **Improve Documentation**: Fix typos, add examples, clarify instructions
+- 🎨 **UI/UX Enhancements**: Improve the design and user experience
+- 🔧 **Code Contributions**: Fix bugs or implement new features
+
+### Development Workflow
+
+1. **Fork the repository**
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/DocuVerse.git
+   ```
+
+2. **Create a feature branch**
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+
+3. **Make your changes**
+   - Follow existing code style
+   - Add comments for complex logic
+   - Update documentation if needed
+
+4. **Test your changes**
+   ```bash
+   # Run backend tests
+   npm test
+
+   # Run frontend
+   npm run dev
+   ```
+
+5. **Commit with clear messages**
+   ```bash
+   git commit -m "feat: add new diagram type for data flow"
+   ```
+
+6. **Push and create a Pull Request**
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+
+### Code Style Guidelines
+- Use **ESLint** for JavaScript/React
+- Use **Black** for Python formatting
+- Write meaningful variable names
+- Add JSDoc comments for functions
+- Keep functions small and focused
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+
+### MIT License Summary
+- ✅ **Commercial use** allowed
+- ✅ **Modification** allowed
+- ✅ **Distribution** allowed
+- ✅ **Private use** allowed
+- ⚠️ **Liability**: No warranty provided
+- ⚠️ **Attribution**: Must give credit to original author
+
+**When using this project, please provide attribution:**
+```
+DocuVerse by @nilo-yinc
+https://github.com/nilo-yinc/DocuVerse
+```
+
+---
+
+## 🙏 Acknowledgments
+
+- **Google Gemini** - Powering the AI engine
+- **FastAPI** - High-performance Python backend
+- **React Team** - Modern UI framework
+- **MongoDB** - Flexible database solution
+- **Mermaid.js** - Beautiful diagram rendering
+- **Open Source Community** - For inspiration and tools
+
+---
+
+## 📞 Contact & Support
+
+- **Issues**: [GitHub Issues](https://github.com/nilo-yinc/DocuVerse/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/nilo-yinc/DocuVerse/discussions)
+- **Email**: repository owner (via GitHub profile)
+
+---
+
+## 🗺 Roadmap
+
+- [ ] Real-time collaborative editing
+- [ ] Export to PDF with custom templates
+- [ ] Integration with Jira/Confluence
+- [ ] Multi-language support
+- [ ] Cloud file storage (AWS S3)
+- [ ] Advanced analytics dashboard
+- [ ] API for third-party integrations
+- [ ] Mobile app (React Native)
+
+---
+
+<div align="center">
+
+**⭐ Star this repo if you find it helpful!**
+
+Made with ❤️ by the DocuVerse team
+
+[Report Bug](https://github.com/nilo-yinc/DocuVerse/issues) • [Request Feature](https://github.com/nilo-yinc/DocuVerse/issues) • [Documentation](https://github.com/nilo-yinc/DocuVerse/wiki)
+
+</div>
