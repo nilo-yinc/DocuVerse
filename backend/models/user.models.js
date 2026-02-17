@@ -16,8 +16,13 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: true,
       minlength: 6,
+      // NOT required — Google OAuth users won't have a password
+    },
+    googleId: {
+      type: String,
+      unique: true,
+      sparse: true, // allows multiple null values (non-Google users)
     },
     role: {
       type: String,
@@ -52,17 +57,15 @@ const userSchema = new mongoose.Schema(
 
 // Hash password before saving
 userSchema.pre("save", async function () {
-  // If password is not modified, just return (promise resolves automatically)
-  if (!this.isModified("password")) {
+  if (!this.password || !this.isModified("password")) {
     return;
   }
-  
-  // Hash the password
   this.password = await bcrypt.hash(this.password, 10);
 });
 
 // Compare password method
 userSchema.methods.comparePassword = async function (password) {
+  if (!this.password) return false; // Google-only users have no password
   return await bcrypt.compare(password, this.password);
 };
 

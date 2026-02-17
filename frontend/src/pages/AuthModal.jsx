@@ -149,9 +149,11 @@ const AuthModal = ({ onClose }) => {
                     <button
                         type="button"
                         onClick={handleGoogleLogin}
-                        className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-gray-800 font-medium py-2.5 px-4 rounded transition shadow-sm border border-gray-300"
+                        className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-50 text-gray-800 font-medium py-2.5 px-4 rounded transition-all duration-300 shadow-sm border border-gray-300 hover:shadow-[0_6px_20px_rgba(66,133,244,0.25)] hover:border-[#4285F4]/40 hover:scale-[1.02] active:scale-95 group"
                     >
-                        <GoogleIcon />
+                        <span className="transition-transform duration-300 group-hover:scale-110">
+                            <GoogleIcon />
+                        </span>
                         <span>{isLogin ? 'Sign in with Google' : 'Sign up with Google'}</span>
                     </button>
 

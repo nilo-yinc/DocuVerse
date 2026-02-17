@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-
+import api from '../api/client';
 import useTitle from '../hooks/useTitle';
 
 const GoogleIcon = () => (
@@ -20,9 +20,18 @@ const Login = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [rememberMe, setRememberMe] = useState(false);
     const { login, register, token } = useAuth();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
+
+    // Forgot password states
+    const [forgotMode, setForgotMode] = useState(false);
+    const [forgotEmail, setForgotEmail] = useState('');
+    const [forgotOtp, setForgotOtp] = useState('');
+    const [forgotNewPassword, setForgotNewPassword] = useState('');
+    const [forgotLoading, setForgotLoading] = useState(false);
+    const [forgotMsg, setForgotMsg] = useState('');
 
     useEffect(() => {
         if (token) {
@@ -30,7 +39,6 @@ const Login = () => {
         }
     }, [token, navigate]);
 
-    // Show error from Google auth failure
     useEffect(() => {
         const googleError = searchParams.get('error');
         if (googleError === 'google_auth_failed') {
@@ -38,12 +46,26 @@ const Login = () => {
         }
     }, [searchParams]);
 
+    // Load remembered email
+    useEffect(() => {
+        const savedEmail = localStorage.getItem('docuverse_remember_email');
+        if (savedEmail) {
+            setEmail(savedEmail);
+            setRememberMe(true);
+        }
+    }, []);
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
         if (isLogin) {
             const res = await login(email, password);
             if (res.success) {
+                if (rememberMe) {
+                    localStorage.setItem('docuverse_remember_email', email);
+                } else {
+                    localStorage.removeItem('docuverse_remember_email');
+                }
                 navigate('/dashboard');
             } else {
                 setError(res.msg);
@@ -62,12 +84,96 @@ const Login = () => {
 
     const handleGoogleLogin = () => {
         const authBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1';
-        // For relative URLs, build full URL from current origin
         const fullUrl = authBaseUrl.startsWith('http')
             ? authBaseUrl
             : `${window.location.origin}${authBaseUrl}`;
         window.location.href = `${fullUrl}/users/google/login`;
     };
+
+    const handleForgotSubmitEmail = async (e) => {
+        e.preventDefault();
+        setError(''); setForgotMsg(''); setForgotLoading(true);
+        try {
+            const res = await api.post('/users/forgot-password', { email: forgotEmail });
+            if (res.data?.status) {
+                setForgotMsg(res.data.message);
+                setForgotMode('otp');
+            } else {
+                setError(res.data?.message || 'Failed to send reset code');
+            }
+        } catch (err) {
+            setError(err.response?.data?.message || 'Failed to send reset code');
+        } finally { setForgotLoading(false); }
+    };
+
+    const handleForgotResetPassword = async (e) => {
+        e.preventDefault();
+        setError(''); setForgotMsg(''); setForgotLoading(true);
+        try {
+            const res = await api.post('/users/reset-password', { email: forgotEmail, otp: forgotOtp, newPassword: forgotNewPassword });
+            if (res.data?.status) {
+                setForgotMsg(res.data.message);
+                setTimeout(() => { setForgotMode(false); setForgotEmail(''); setForgotOtp(''); setForgotNewPassword(''); setForgotMsg(''); }, 2500);
+            } else {
+                setError(res.data?.message || 'Password reset failed');
+            }
+        } catch (err) {
+            setError(err.response?.data?.message || 'Password reset failed');
+        } finally { setForgotLoading(false); }
+    };
+
+    if (forgotMode) {
+        return (
+            <div className="flex justify-center items-center h-screen bg-dark-bg">
+                <div className="bg-dark-card p-8 rounded border border-neon-purple shadow-lg w-96">
+                    <button type="button" onClick={() => { setForgotMode(false); setError(''); setForgotMsg(''); }}
+                        className="text-sm text-gray-400 hover:text-white mb-4 flex items-center gap-1">
+                        ← Back to Sign In
+                    </button>
+                    <h2 className="text-2xl mb-2 text-neon-blue font-bold text-center">Reset Password</h2>
+                    <p className="text-gray-500 text-xs text-center mb-6">
+                        {forgotMode === 'otp' ? 'Enter the 6-digit code sent to your email' : "We'll send a verification code to your email"}
+                    </p>
+
+                    {error && <div className="mb-4 p-3 rounded text-sm bg-red-500/10 text-red-400 border border-red-500/20">{error}</div>}
+                    {forgotMsg && <div className="mb-4 p-3 rounded text-sm bg-green-500/10 text-green-400 border border-green-500/20">{forgotMsg}</div>}
+
+                    {forgotMode === 'email' ? (
+                        <form onSubmit={handleForgotSubmitEmail}>
+                            <div className="mb-4">
+                                <label className="block mb-2 text-gray-400">Email</label>
+                                <input type="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)}
+                                    className="w-full p-2 bg-dark-input rounded text-white border border-gray-700 focus:border-neon-blue outline-none" required />
+                            </div>
+                            <button type="submit" disabled={forgotLoading}
+                                className="w-full bg-neon-purple text-white p-2 rounded hover:bg-purple-700 transition font-bold disabled:opacity-50">
+                                {forgotLoading ? 'Sending...' : 'Send Verification Code'}
+                            </button>
+                        </form>
+                    ) : (
+                        <form onSubmit={handleForgotResetPassword}>
+                            <div className="mb-4">
+                                <label className="block mb-2 text-gray-400">Verification Code</label>
+                                <input type="text" value={forgotOtp} onChange={(e) => setForgotOtp(e.target.value)}
+                                    className="w-full p-2 bg-dark-input rounded text-white border border-gray-700 focus:border-neon-blue outline-none text-center tracking-[0.3em]"
+                                    placeholder="000000" maxLength={6} required />
+                            </div>
+                            <div className="mb-6">
+                                <label className="block mb-2 text-gray-400">New Password</label>
+                                <input type="password" value={forgotNewPassword} onChange={(e) => setForgotNewPassword(e.target.value)}
+                                    className="w-full p-2 bg-dark-input rounded text-white border border-gray-700 focus:border-neon-blue outline-none"
+                                    placeholder="Min 6 characters" minLength={6} required />
+                            </div>
+                            <button type="submit" disabled={forgotLoading}
+                                className="w-full bg-neon-purple text-white p-2 rounded hover:bg-purple-700 transition font-bold disabled:opacity-50">
+                                {forgotLoading ? 'Resetting...' : 'Reset Password'}
+                            </button>
+                        </form>
+                    )}
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex justify-center items-center h-screen bg-dark-bg">
@@ -85,36 +191,37 @@ const Login = () => {
                 {!isLogin && (
                     <div className="mb-4">
                         <label className="block mb-2 text-gray-400">Full Name</label>
-                        <input
-                            type="text"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            className="w-full p-2 bg-dark-input rounded text-white border border-gray-700 focus:border-neon-blue outline-none"
-                            required={!isLogin}
-                        />
+                        <input type="text" value={name} onChange={(e) => setName(e.target.value)}
+                            className="w-full p-2 bg-dark-input rounded text-white border border-gray-700 focus:border-neon-blue outline-none" required={!isLogin} />
                     </div>
                 )}
 
                 <div className="mb-4">
                     <label className="block mb-2 text-gray-400">Email</label>
-                    <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="w-full p-2 bg-dark-input rounded text-white border border-gray-700 focus:border-neon-blue outline-none"
-                        required
-                    />
+                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                        className="w-full p-2 bg-dark-input rounded text-white border border-gray-700 focus:border-neon-blue outline-none" required />
                 </div>
-                <div className="mb-6">
+                <div className="mb-4">
                     <label className="block mb-2 text-gray-400">Password</label>
-                    <input
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="w-full p-2 bg-dark-input rounded text-white border border-gray-700 focus:border-neon-blue outline-none"
-                        required
-                    />
+                    <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                        className="w-full p-2 bg-dark-input rounded text-white border border-gray-700 focus:border-neon-blue outline-none" required />
                 </div>
+
+                {/* Remember Me + Forgot Password */}
+                {isLogin && (
+                    <div className="flex items-center justify-between mb-6">
+                        <label className="flex items-center gap-2 cursor-pointer select-none group">
+                            <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)}
+                                className="w-3.5 h-3.5 accent-neon-purple rounded" />
+                            <span className="text-xs text-gray-500 group-hover:text-gray-300 transition-colors">Remember me</span>
+                        </label>
+                        <button type="button" onClick={() => { setForgotMode('email'); setForgotEmail(email); setError(''); }}
+                            className="text-xs text-neon-blue hover:text-blue-300 hover:underline transition-all">
+                            Forgot password?
+                        </button>
+                    </div>
+                )}
+
                 <button type="submit" className="w-full bg-neon-purple text-white p-2 rounded hover:bg-purple-700 transition font-bold mb-4">
                     {isLogin ? 'Enter System' : 'Register'}
                 </button>
@@ -126,13 +233,15 @@ const Login = () => {
                     <div className="flex-1 h-px bg-gray-700"></div>
                 </div>
 
-                {/* Google Sign In */}
+                {/* Google Sign In with hover effect */}
                 <button
                     type="button"
                     onClick={handleGoogleLogin}
-                    className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-gray-800 font-medium py-2.5 px-4 rounded transition shadow-sm border border-gray-300"
+                    className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-50 text-gray-800 font-medium py-2.5 px-4 rounded transition-all duration-300 shadow-sm border border-gray-300 hover:shadow-[0_6px_20px_rgba(66,133,244,0.25)] hover:border-[#4285F4]/40 hover:scale-[1.02] active:scale-95 group"
                 >
-                    <GoogleIcon />
+                    <span className="transition-transform duration-300 group-hover:scale-110">
+                        <GoogleIcon />
+                    </span>
                     <span>{isLogin ? 'Sign in with Google' : 'Sign up with Google'}</span>
                 </button>
 
