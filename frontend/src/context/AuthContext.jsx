@@ -70,7 +70,7 @@ export const AuthProvider = ({ children }) => {
                     }
                 } catch (err) {
                     console.log("Error fetching profile:", err);
-                    if (err.response?.status === 401) {
+                    if (err.response?.status === 401 || err.response?.status === 400) {
                         deleteCookie(STORAGE_KEY);
                         sessionStorage.removeItem(STORAGE_KEY);
                         setToken(null);
