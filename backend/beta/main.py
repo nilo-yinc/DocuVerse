@@ -146,6 +146,46 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.on_event("startup")
+async def startup_event():
+    # Start keep-alive loop
+    loop = asyncio.get_event_loop()
+    loop.create_task(keep_alive_loop())
+
+async def keep_alive_loop():
+    """Pings the server itself every 14 minutes to prevent Render sleep."""
+    import os
+    import asyncio
+    import requests
+    
+    interval = 14 * 60  # 14 minutes
+    
+    while True:
+        try:
+            await asyncio.sleep(interval)
+            
+            # Ping Self (Render sets RENDER_EXTERNAL_URL)
+            self_url = os.getenv("BETA_URL") or os.getenv("RENDER_EXTERNAL_URL")
+            if self_url:
+                try:
+                    requests.get(f"{self_url.rstrip('/')}/health")
+                    print(f"[Keep-Alive] Self-ping sent to {self_url}")
+                except Exception as e:
+                    print(f"[Keep-Alive] Self-ping failed: {e}")
+            else:
+                 print("[Keep-Alive] Skiping self-ping: BETA_URL/RENDER_EXTERNAL_URL not set")
+
+            # Also ping Node backend if known
+            node_url = os.getenv("NODE_BACKEND_URL")
+            if node_url:
+                 try:
+                    requests.get(f"{node_url.rstrip('/')}/health")
+                 except: 
+                    pass
+        except Exception as e:
+            print(f"[Keep-Alive] Loop error: {e}")
+
 SRS_PROGRESS = {}
 SRS_PROGRESS_LOCK = threading.Lock()
 

@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const path = require('path');
+const axios = require('axios');
 require('dotenv').config({ path: process.env.DOTENV_PATH || path.resolve(__dirname, '../.env') });
 const { streamDocxByFilename } = require('./utils/docxGridfs');
 const Project = require('./models/Project');
@@ -110,6 +111,36 @@ app.get('/health', (req, res) => {
 app.get('/', (req, res) => {
     res.send('DocuVerse API Running');
 });
+
+// Keep-alive mechanism for Render free tier
+const KEEP_ALIVE_INTERVAL = 14 * 60 * 1000; // 14 minutes
+
+setInterval(async () => {
+    try {
+        // Ping Self (Node)
+        const selfUrl = (process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`).replace(/\/+$/, '');
+        
+        try {
+            await axios.get(`${selfUrl}/health`);
+            console.log(`[Keep-Alive] Node self-ping successful: ${selfUrl}`);
+        } catch (e) {
+            console.error(`[Keep-Alive] Node self-ping failed: ${e.message}`);
+        }
+
+        // Ping Python Backend
+        const pyUrl = (process.env.PY_API_BASE || '').replace(/\/+$/, '');
+        if (pyUrl) {
+            try {
+                await axios.get(`${pyUrl}/health`);
+                console.log(`[Keep-Alive] Python ping successful: ${pyUrl}`);
+            } catch (e) {
+                console.error(`[Keep-Alive] Python ping failed: ${e.message}`);
+            }
+        }
+    } catch (e) {
+        console.error('[Keep-Alive] Error:', e.message);
+    }
+}, KEEP_ALIVE_INTERVAL);
 
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
