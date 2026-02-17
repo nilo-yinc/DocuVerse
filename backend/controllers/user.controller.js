@@ -381,11 +381,12 @@ const googleLogin = (req, res) => {
   const state = generateState();
   const nonce = generateNonce();
 
+  const isSecure = req.protocol === 'https' || req.get('x-forwarded-proto') === 'https';
   const cookieOpts = {
     httpOnly: true,
     maxAge: 600000,
     sameSite: "lax",
-    secure: true, // Render always uses HTTPS
+    secure: isSecure,
   };
   res.cookie("oauth_state", state, cookieOpts);
   res.cookie("oauth_nonce", nonce, cookieOpts);
