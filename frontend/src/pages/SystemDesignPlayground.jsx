@@ -161,7 +161,7 @@ const SystemDesignPlayground = () => {
                         <span className="text-[#55b38b]">Re-imagined</span> for Devs.
                     </h1>
                     <p className="text-[#b3bbc2] mt-6 max-w-2xl text-lg">
-                        AutoSRS ships a focused playground for UML, sequence, and architecture flows.
+                        DocuVerse ships a focused playground for UML, sequence, and architecture flows.
                         Design with the canvas, then manual edits are supported.
                     </p>
                     <div className="mt-8 flex flex-wrap gap-4">

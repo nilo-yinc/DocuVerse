@@ -39,7 +39,7 @@ const DiagramFeature = () => {
                             <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#7ee787] to-[#2ea043]">Re-imagined</span> for Devs.
                         </h2>
                         <p className="text-[#8b949e] max-w-xl text-lg">
-                            Don't fight with generic drawing tools. AutoSRS provides a dedicated playground for
+                            Don't fight with generic drawing tools. DocuVerse provides a dedicated playground for
                             UML, Sequence, and Architecture diagrams that map directly to your code.
                         </p>
                     </div>

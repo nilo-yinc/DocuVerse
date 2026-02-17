@@ -98,7 +98,7 @@ const LearningFeature = () => {
                     </motion.div>
                     <h2 className="text-4xl font-bold text-white mb-4">Master the Fundamentals</h2>
                     <p className="text-[#8b949e] max-w-2xl mx-auto">
-                        AutoSRS isn't just a tool; it's a mentor. Explore our interactive guides on modern software architecture.
+                        DocuVerse isn't just a tool; it's a mentor. Explore our interactive guides on modern software architecture.
                     </p>
                 </div>
 

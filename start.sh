@@ -56,7 +56,7 @@ if ! command -v mmdc &> /dev/null; then
 fi
 
 echo "========================================"
-echo "Starting AutoSRS server..."
+echo "Starting DocuVerse server..."
 echo "========================================"
 echo "Server will be available at: http://127.0.0.1:8000"
 echo "Press Ctrl+C to stop the server"
