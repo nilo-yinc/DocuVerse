@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, BrainCircuit, FileText, MessageSquare, ChevronRight, Zap, X, Send, Bot, User, Workflow, MousePointer2, Plus, Share2, Download, Settings, Database, Server, Smartphone, Globe, Layout, Search, Clock, CheckCircle, AlertCircle, Mail, Image as ImageIcon, RefreshCw, Code } from 'lucide-react';
 import axios from 'axios';
@@ -473,17 +473,33 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
         }
     };
 
+    const pullLatestProjectState = useCallback(async () => {
+        if (previewMode || !projectId || projectId === 'demo' || !token) return;
+        try {
+            const res = await axios.get(`${nodeApiBase}/api/projects/${projectId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const data = res.data || {};
+            setStatus(data.status || 'DRAFT');
+            setFeedback(Array.isArray(data.reviewFeedback) ? data.reviewFeedback : []);
+            setWorkflowTimeline(dedupeWorkflowTimeline(data.workflowEvents || []));
+            if (typeof data.clientEmail === 'string') setClientEmail(data.clientEmail);
+            if (typeof data.documentUrl === 'string' && data.documentUrl) setActiveDocumentUrl(data.documentUrl);
+            if (data.hq) setHq(data.hq);
+        } catch (error) {
+            if ([404, 502, 503, 504].includes(error?.response?.status)) return;
+            console.error("Failed to pull latest project state:", error);
+        }
+    }, [previewMode, projectId, token, nodeApiBase]);
+
     useEffect(() => {
-        if (previewMode || !projectId || projectId === 'demo') return;
-        syncNodeProject({
-            status,
-            clientEmail,
-            workflowEvents: workflowTimeline,
-            reviewFeedback: feedback,
-            documentUrl: activeDocumentUrl || undefined,
-            hq
-        });
-    }, [projectId, previewMode, status, clientEmail, workflowTimeline, feedback, activeDocumentUrl, hq]);
+        if (previewMode || !projectId || projectId === 'demo' || !token) return;
+        const hotSync = status === 'IN_REVIEW' || status === 'CHANGES_REQUESTED';
+        const intervalMs = hotSync ? 2000 : 7000;
+        pullLatestProjectState();
+        const interval = setInterval(pullLatestProjectState, intervalMs);
+        return () => clearInterval(interval);
+    }, [previewMode, projectId, token, status, pullLatestProjectState]);
 
     useEffect(() => {
         if (previewMode || !projectId || projectId === 'demo' || !token) return;
@@ -534,13 +550,7 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
             ];
             setStatus('IN_REVIEW');
             setWorkflowTimeline(nextTimeline);
-            await syncNodeProject({
-                status: 'IN_REVIEW',
-                workflowEvents: nextTimeline,
-                reviewFeedback: feedback,
-                documentUrl: activeDocumentUrl || undefined,
-                clientEmail
-            });
+            await pullLatestProjectState();
             if (res.data?.warning) {
                 setWorkflowMessage("Review sent, but email delivery failed. Check SMTP settings.");
             } else {
