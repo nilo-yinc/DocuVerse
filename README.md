@@ -50,9 +50,12 @@
 
 ## Platform Preview
 
-<div align="center">
-  <img src=".github/screenshots/platform-preview.png" alt="DocuVerse Platform" width="100%"/>
-  <br />
+<img width="1918" height="991" alt="Screenshot 2026-02-18 015638" src="https://github.com/user-attachments/assets/8ee1a79b-99e2-46bb-ad13-9ea2e27057a7" />
+<img width="1913" height="952" alt="Screenshot 2026-02-18 015715" src="https://github.com/user-attachments/assets/0baebfec-1554-427a-8b24-c483f16734aa" />
+<img width="1910" height="1005" alt="Screenshot 2026-02-18 015800" src="https://github.com/user-attachments/assets/309c3d8e-fef6-46e1-8998-a62407b6baf3" />
+<img width="1910" height="1002" alt="Screenshot 2026-02-18 020131" src="https://github.com/user-attachments/assets/9ba18f06-0708-473b-9319-dca9555dd452" />
+
+
   <sub>Enterprise SRS generation with AI-powered workflow and interactive studio</sub>
 </div>
 
