@@ -1,0 +1,32 @@
+{
+  "name": "oauth2openidconnect",
+  "version": "1.0.0",
+  "description": "OpenIDConnect OAuth2.0 ",
+  "keywords": [
+    "Oauth2.0",
+    "OpenIDConnect",
+    "Backend",
+    "Auth"
+  ],
+  "license": "ISC",
+  "author": "Sagar maheshwari",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "axios": "^1.8.4",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "jwks-rsa": "^3.2.0",
+    "mongoose": "^8.13.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
