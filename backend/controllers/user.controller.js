@@ -385,7 +385,7 @@ const googleLogin = (req, res) => {
     httpOnly: true,
     maxAge: 600000,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: true, // Render always uses HTTPS
   };
   res.cookie("oauth_state", state, cookieOpts);
   res.cookie("oauth_nonce", nonce, cookieOpts);
