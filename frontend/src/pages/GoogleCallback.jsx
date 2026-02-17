@@ -20,9 +20,13 @@ const GoogleCallback = () => {
         if (token) {
             processed.current = true;
             handleGoogleCallback({ token, user: { id, name, email } });
-            // Navigate after a short delay to let state settle
+
+            // Navigate to stored redirect URL if exists, else dashboard
+            const target = sessionStorage.getItem('oauth_redirect_target') || '/dashboard';
+            sessionStorage.removeItem('oauth_redirect_target');
+
             setTimeout(() => {
-                window.location.href = '/dashboard';
+                window.location.href = target;
             }, 300);
         } else {
             processed.current = true;

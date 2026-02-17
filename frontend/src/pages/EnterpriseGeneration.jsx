@@ -177,18 +177,16 @@ const EnterpriseGeneration = () => {
         } catch (err) {
             console.error("Generation Error:", err);
 
-            // Auto-fallback to instant if quick fails
-            if (mode === 'quick') {
-                console.warn("Quick mode failed, attempting instant (safe) mode fallback...");
-                setMessage("Standard generation failed. Retrying with Safe Mode...");
-                // Small delay to let user see status change
-                setTimeout(() => {
-                    startGeneration('instant');
-                }, 2000);
-                return;
-            }
-
             if (mode === 'quick' || mode === 'instant') {
+                // Special Handling: If Project Not Found, clear stale ID and retry as NEW project
+                if (err.message.includes("Project not found") || err.message.includes("404")) {
+                    console.warn("Generation: Stale Project ID detected. Clearing storage and retrying as new project...");
+                    localStorage.removeItem('autoSRS_activeProjectId');
+                    // Small delay before retry
+                    setTimeout(() => startGeneration(mode), 1000);
+                    return;
+                }
+
                 setError(err.message);
                 setStatus('error');
                 clearInterval(timerRef.current);

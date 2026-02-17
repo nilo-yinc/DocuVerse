@@ -446,23 +446,29 @@ const googleCallback = async (req, res) => {
       return res.redirect(`${frontendUrl}/login?error=google_auth_failed`);
     }
 
-    // Find or create user
+    // --- Find or Create User ---
     let user = await User.findOne({ googleId: decodedToken.sub });
-    if (!user) {
+    
+    if (user) {
+      console.log(`[Google-Auth] Existing user found by googleId: ${user.email}`);
+    } else {
       user = await User.findOne({ email: decodedToken.email });
       if (user) {
+        console.log(`[Google-Auth] Existing user found by email: ${user.email}. Linking googleId.`);
         user.googleId = decodedToken.sub;
         if (!user.profilePic && decodedToken.picture) user.profilePic = decodedToken.picture;
         await user.save();
       } else {
+        console.log(`[Google-Auth] Creating new user for: ${decodedToken.email}`);
         user = await User.create({
           googleId: decodedToken.sub,
-          email: decodedToken.email,
+          email: decodedToken.email.toLowerCase(),
           name: decodedToken.name || decodedToken.email.split("@")[0],
           profilePic: decodedToken.picture || "",
         });
       }
     }
+    // ---------------------------
 
     const jwtToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRY || "24h",
