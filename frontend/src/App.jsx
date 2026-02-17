@@ -17,6 +17,7 @@ import EnterpriseSRS from './pages/EnterpriseSRS';
 import CurriculumPage from './pages/CurriculumPage';
 import ClientReview from './pages/ClientReview';
 import GoogleCallback from './pages/GoogleCallback';
+import MobileWarning from './components/ui/MobileWarning';
 import React from 'react';
 
 class AppErrorBoundary extends React.Component {
@@ -69,6 +70,7 @@ function App() {
     <Router>
       <AuthProvider>
         <div className="min-h-screen bg-dark-bg text-white">
+          <MobileWarning />
           <AppErrorBoundary>
             <Routes>
               <Route path="/" element={<LandingPage />} />
