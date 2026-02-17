@@ -48,56 +48,12 @@
 
 ---
 
-## Screenshots
+## Platform Preview
 
 <div align="center">
-
-### Platform Showcase
-
-<table>
-  <tr>
-    <td align="center">
-      <img src=".github/screenshots/01-enterprise-access.png" alt="Enterprise Access Login" width="400"/>
-      <br />
-      <sub><b>Secure Authentication</b></sub>
-      <br />
-      <sub>OAuth & JWT-based login with Google integration</sub>
-    </td>
-    <td align="center">
-      <img src=".github/screenshots/02-spiral-model.png" alt="Spiral Model Visualization" width="400"/>
-      <br />
-      <sub><b>Interactive Spiral Model</b></sub>
-      <br />
-      <sub>Visual planning with iterative development cycles</sub>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src=".github/screenshots/03-generation-complete.png" alt="Generation Complete" width="400"/>
-      <br />
-      <sub><b>Generation Complete</b></sub>
-      <br />
-      <sub>Download options and Studio integration</sub>
-    </td>
-    <td align="center">
-      <img src=".github/screenshots/04-enterprise-wizard.png" alt="Enterprise Wizard" width="400"/>
-      <br />
-      <sub><b>Enterprise SRS Wizard</b></sub>
-      <br />
-      <sub>Multi-step form for detailed requirements</sub>
-    </td>
-  </tr>
-  <tr>
-    <td align="center" colspan="2">
-      <img src=".github/screenshots/05-generation-progress.png" alt="Generation in Progress" width="600"/>
-      <br />
-      <sub><b>Real-Time Generation Progress</b></sub>
-      <br />
-      <sub>Live progress tracking with AI-powered document creation</sub>
-    </td>
-  </tr>
-</table>
-
+  <img src=".github/screenshots/platform-preview.png" alt="DocuVerse Platform" width="100%"/>
+  <br />
+  <sub>Enterprise SRS generation with AI-powered workflow and interactive studio</sub>
 </div>
 
 ---
