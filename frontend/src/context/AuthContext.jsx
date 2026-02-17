@@ -161,8 +161,17 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    const handleGoogleCallback = ({ token: googleToken, user: googleUser }) => {
+        if (googleToken) {
+            setCookie(STORAGE_KEY, googleToken, 1);
+            setToken(googleToken);
+            setUser(googleUser);
+            api.defaults.headers.common['Authorization'] = `Bearer ${googleToken}`;
+        }
+    };
+
     return (
-        <AuthContext.Provider value={{ user, token, loading, login, register, logout, updateProfile, requestPasswordOTP, verifyPasswordOTP }}>
+        <AuthContext.Provider value={{ user, token, loading, login, register, logout, updateProfile, requestPasswordOTP, verifyPasswordOTP, handleGoogleCallback }}>
             {children}
         </AuthContext.Provider>
     );
