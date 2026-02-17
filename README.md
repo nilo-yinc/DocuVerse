@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🚀 DocuVerse
+# DocuVerse
 
 ![Node.js](https://img.shields.io/badge/Node.js-18+-green?logo=node.js)
 ![React](https://img.shields.io/badge/React-18+-blue?logo=react)
@@ -11,32 +11,32 @@
 
 **AI-Powered Software Requirements Specification (SRS) Generator & Interactive Documentation Studio**
 
-[Live Demo](https://docu-verse-ai.vercel.app) • [Documentation](#-documentation) • [Contributing](#-contributing)
+[Live Demo](https://docu-verse-ai.vercel.app) • [Documentation](#documentation) • [Contributing](#contributing)
 
 </div>
 
 ---
 
-## 📖 Overview
+## Overview
 
-**DocuVerse** is a full-stack MERN platform that revolutionizes technical documentation creation. Combining the power of Google Gemini AI with an intuitive visual studio, DocuVerse generates professional, IEEE 830-compliant SRS documents in under 60 seconds—complete with architecture diagrams, use cases, and interactive editing capabilities.
+**DocuVerse** is a full-stack MERN platform that revolutionizes technical documentation creation. Combining the power of advanced AI language models with an intuitive visual studio, DocuVerse generates professional, IEEE 830-compliant SRS documents in under 60 seconds—complete with architecture diagrams, use cases, and interactive editing capabilities.
 
-### ✨ Key Features
+### Key Features
 
-- 🤖 **AI-Powered Generation**: 7 specialized AI agents working in parallel to create comprehensive SRS documents
-- ⚡ **Lightning Fast**: Generate complete documentation in 30-90 seconds
-- 🎨 **Visual Studio**: Interactive editing environment with real-time preview
-- 📊 **Auto-Generated Diagrams**: System context, use case, sequence, and architecture diagrams
-- 🔐 **Secure Authentication**: Google OAuth & JWT-based auth with session management
-- 📱 **Responsive Design**: Beautiful dark-mode UI optimized for all devices
-- 💾 **Cloud Storage**: MongoDB-based persistence with GridFS for large documents
-- 🎯 **Multi-Mode Generation**: Quick, Standard, and Enterprise-grade documentation levels
-- 🔄 **Version Control**: Track document revisions and workflow history
-- 📧 **Client Collaboration**: Share documents for review with stakeholders
+- **AI-Powered Generation**: 7 specialized AI agents working in parallel to create comprehensive SRS documents
+- **Lightning Fast**: Generate complete documentation in 30-90 seconds
+- **Visual Studio**: Interactive editing environment with real-time preview
+- **Auto-Generated Diagrams**: System context, use case, sequence, and architecture diagrams
+- **Secure Authentication**: OAuth & JWT-based auth with session management
+- **Responsive Design**: Beautiful dark-mode UI optimized for all devices
+- **Cloud Storage**: MongoDB-based persistence with GridFS for large documents
+- **Multi-Mode Generation**: Quick, Standard, and Enterprise-grade documentation levels
+- **Version Control**: Track document revisions and workflow history
+- **Client Collaboration**: Share documents for review with stakeholders
 
 ---
 
-## 🎯 Use Cases
+## Use Cases
 
 - **Startups**: Rapidly prototype and document new product ideas
 - **Developers**: Auto-generate technical specs from feature descriptions
@@ -46,7 +46,7 @@
 
 ---
 
-## 🛠 Tech Stack
+## Tech Stack
 
 ### Frontend
 - **React 18** - Modern UI framework
@@ -76,7 +76,7 @@
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -106,16 +106,16 @@
    # MongoDB
    MONGO_URI=your_mongodb_connection_string
 
-   # Google Gemini AI
-   GEMINI_API_KEY=your_gemini_api_key
+   # AI Language Model API
+   GEMINI_API_KEY=your_ai_api_key
 
    # JWT Secret
    JWT_SECRET=your_secure_random_string
    JWT_EXPIRY=24h
 
-   # Google OAuth (Optional)
-   GOOGLE_CLIENT_ID=your_google_client_id
-   GOOGLE_CLIENT_SECRET=your_google_client_secret
+   # OAuth (Optional)
+   GOOGLE_CLIENT_ID=your_oauth_client_id
+   GOOGLE_CLIENT_SECRET=your_oauth_client_secret
    GOOGLE_REDIRECT_URI=http://localhost:5000/api/v1/users/google/callback
 
    # Frontend URL
@@ -180,7 +180,7 @@
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 DocuVerse/
@@ -216,7 +216,7 @@ DocuVerse/
 
 ---
 
-## 🎨 Features in Detail
+## Features in Detail
 
 ### 1. **Intelligent SRS Generation**
 - Multi-agent AI system with specialized roles (Requirements, Architecture, UI/UX, Security, etc.)
@@ -251,16 +251,16 @@ DocuVerse/
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions from the community! Here's how you can help:
 
 ### Ways to Contribute
-- 🐛 **Report Bugs**: Open an issue with detailed steps to reproduce
-- 💡 **Suggest Features**: Share your ideas in the discussions
-- 📝 **Improve Documentation**: Fix typos, add examples, clarify instructions
-- 🎨 **UI/UX Enhancements**: Improve the design and user experience
-- 🔧 **Code Contributions**: Fix bugs or implement new features
+- **Report Bugs**: Open an issue with detailed steps to reproduce
+- **Suggest Features**: Share your ideas in the discussions
+- **Improve Documentation**: Fix typos, add examples, clarify instructions
+- **UI/UX Enhancements**: Improve the design and user experience
+- **Code Contributions**: Fix bugs or implement new features
 
 ### Development Workflow
 
@@ -307,17 +307,17 @@ We welcome contributions from the community! Here's how you can help:
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
 ### MIT License Summary
-- ✅ **Commercial use** allowed
-- ✅ **Modification** allowed
-- ✅ **Distribution** allowed
-- ✅ **Private use** allowed
-- ⚠️ **Liability**: No warranty provided
-- ⚠️ **Attribution**: Must give credit to original author
+- **Commercial use** allowed
+- **Modification** allowed
+- **Distribution** allowed
+- **Private use** allowed
+- **Liability**: No warranty provided
+- **Attribution**: Must give credit to original author
 
 **When using this project, please provide attribution:**
 ```
@@ -327,10 +327,10 @@ https://github.com/nilo-yinc/DocuVerse
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
-- **Google Gemini** - Powering the AI engine
-- **FastAPI** - High-performance Python backend
+- **Advanced AI Language Models** - Powering the intelligent document generation
+- **FastAPI** - High-performance Python backend framework
 - **React Team** - Modern UI framework
 - **MongoDB** - Flexible database solution
 - **Mermaid.js** - Beautiful diagram rendering
@@ -338,7 +338,7 @@ https://github.com/nilo-yinc/DocuVerse
 
 ---
 
-## 📞 Contact & Support
+## Contact & Support
 
 - **Issues**: [GitHub Issues](https://github.com/nilo-yinc/DocuVerse/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/nilo-yinc/DocuVerse/discussions)
@@ -346,7 +346,7 @@ https://github.com/nilo-yinc/DocuVerse
 
 ---
 
-## 🗺 Roadmap
+## Roadmap
 
 - [ ] Real-time collaborative editing
 - [ ] Export to PDF with custom templates
