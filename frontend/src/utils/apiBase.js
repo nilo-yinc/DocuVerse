@@ -8,5 +8,10 @@ export const normalizeApiBase = (rawValue, fallback = '') => {
 
 export const defaultNodeBase = () => {
     if (typeof window === 'undefined') return 'http://localhost:5000';
-    return `http://${window.location.hostname || 'localhost'}:5000`;
+    // In production (Vercel), fall back to the Render backend URL
+    const hostname = window.location.hostname;
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+        return 'https://docuverse-node.onrender.com';
+    }
+    return `http://localhost:5000`;
 };
