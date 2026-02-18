@@ -15,8 +15,15 @@ export default defineConfig({
       input: {
         app: resolve(__dirname, 'index.html'),
       },
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+             return 'vendor';
+          }
+        },
+      },
     },
-    chunkSizeWarningLimit: 16000,
+    chunkSizeWarningLimit: 2000,
   },
   server: {
     proxy: {
