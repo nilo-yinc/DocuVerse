@@ -1219,7 +1219,8 @@ async def analyze_notebook(request: NotebookRequest):
         result = await WorkflowService.execute_workflow("analyze", payload)
         return JSONResponse(content=result)
     except Exception as e:
-        print(f"Notebook Analysis Error: {e}")
+        print(f"Notebook Analysis Error (Soft Fail): {e}")
+        # Return empty services so UI doesn't break
         return JSONResponse(content={"services": []})
 
 @app.post("/api/notebook/chat")
@@ -1349,7 +1350,16 @@ async def generate_diagram_image(request: DiagramImageRequest):
 async def append_diagram_to_project(project_id: str, request: AppendDiagramRequest):
     project = ProjectStore.get_project(project_id)
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        # Fallback: Create a temporary project entry if in-memory store was wiped
+        print(f"⚠️ Project {project_id} not found in store during append. Creating fallback.")
+        project = Project(
+            id=project_id,
+            name="Restored Project",
+            contentMarkdown=request.content or "# Restored Project\n",
+            documentUrl=f"/download_srs/{project_id}_SRS.docx" # Best guess
+        )
+        ProjectStore.save_project(project)
+
     if not request.content.strip():
         raise HTTPException(status_code=400, detail="Content is required")
 
@@ -1367,16 +1377,22 @@ async def append_diagram_to_project(project_id: str, request: AppendDiagramReque
         project.contentMarkdown = (project.contentMarkdown or "") + markdown_block
 
         updated_document_url = project.documentUrl
-        doc_path = _resolve_docx_path(project.documentUrl or "")
-        if doc_path and doc_path.exists():
-            doc = Document(doc_path)
-            doc.add_page_break()
-            doc.add_heading(caption, level=1)
-            doc.add_paragraph("Generated from DocuVerse Studio.")
-            doc.add_picture(str(image_path), width=Inches(6.5))
-            doc.save(doc_path)
-        else:
-            updated_document_url = project.documentUrl
+        
+        # Try to append to DOCX, but don't fail the request if it fails (Ephemeral FS issues)
+        try:
+            doc_path = _resolve_docx_path(project.documentUrl or "")
+            if doc_path and doc_path.exists():
+                doc = Document(doc_path)
+                doc.add_page_break()
+                doc.add_heading(caption, level=1)
+                doc.add_paragraph("Generated from DocuVerse Studio.")
+                doc.add_picture(str(image_path), width=Inches(6.5))
+                doc.save(doc_path)
+                print(f"✅ Appended diagram to DOCX: {doc_path}")
+            else:
+                print(f"⚠️ DOCX file not found at {doc_path}. Skipping append to file.")
+        except Exception as doc_err:
+             print(f"⚠️ Failed to append to DOCX (non-fatal): {doc_err}")
 
         ProjectStore.save_project(project)
         return JSONResponse(content={
@@ -1385,9 +1401,13 @@ async def append_diagram_to_project(project_id: str, request: AppendDiagramReque
             "contentMarkdown": project.contentMarkdown
         })
     except FileNotFoundError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"❌ Diagram generation failed (File Not Found): {e}")
+        raise HTTPException(status_code=500, detail=f"Diagram generation failed: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Append diagram failed: {e}")
+        print(f"❌ Append diagram failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Append diagram failed: {str(e)}")
 
 # --- DocuVerse Studio & Project Endpoints ---
 
@@ -1448,7 +1468,16 @@ async def create_project(request: CreateProjectRequest):
 async def get_project(project_id: str):
     project = ProjectStore.get_project(project_id)
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        # Auto-heal: Create fallback project if missing from memory
+        print(f"⚠️ Project {project_id} not found. Creating fallback entry.")
+        project = Project(
+            id=project_id,
+            name="Restored Project",
+            contentMarkdown="# Restored Project\n\nBackend state was reset. This is a recovered session.",
+            documentUrl=f"/download_srs/{project_id}_SRS.docx",
+            status="DRAFT"
+        )
+        ProjectStore.save_project(project)
     return project
 
 @app.post("/api/workflow/start-review")

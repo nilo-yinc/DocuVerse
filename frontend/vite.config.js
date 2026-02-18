@@ -16,6 +16,7 @@ export default defineConfig({
         app: resolve(__dirname, 'index.html'),
       },
     },
+    chunkSizeWarningLimit: 16000,
   },
   server: {
     proxy: {

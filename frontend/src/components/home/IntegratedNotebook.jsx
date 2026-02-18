@@ -69,6 +69,7 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
     const [loadingDiagram, setLoadingDiagram] = useState(false);
     const [diagramImageLoading, setDiagramImageLoading] = useState(false);
     const [diagramImageError, setDiagramImageError] = useState("");
+    const [srsAppending, setSrsAppending] = useState(false);
 
     // --- UI State ---
     const [activeTab, setActiveTab] = useState('insights'); // 'insights' | 'chat' | 'diagram'
@@ -346,7 +347,7 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
             setDiagramImageError("No content available.");
             return;
         }
-        setDiagramImageLoading(true);
+        setSrsAppending(true);
         setDiagramImageError("");
         try {
             const res = await axios.post(`${pythonApiBase}/api/project/${projectId}/append-diagram`, {
@@ -362,12 +363,14 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
                     contentMarkdown: res.data.contentMarkdown,
                     documentUrl: res.data.documentUrl
                 });
+                setHqToast({ visible: true, message: "Diagram appended to SRS notes." });
+                setTimeout(() => setHqToast({ visible: false, message: "" }), 3000);
             }
         } catch (error) {
             const msg = error.response?.data?.detail || "Append diagram failed.";
             setDiagramImageError(msg);
         } finally {
-            setDiagramImageLoading(false);
+            setSrsAppending(false);
         }
     };
 
@@ -433,7 +436,7 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
             setDiagramImageError("Project not found. Save this document first.");
             return;
         }
-        setDiagramImageLoading(true);
+        setSrsAppending(true);
         setDiagramImageError("");
         try {
             const res = await axios.post(`${pythonApiBase}/api/project/${projectId}/append-diagram`, {
@@ -442,12 +445,14 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
             });
             if (res.data?.contentMarkdown) {
                 setContent(res.data.contentMarkdown);
+                setHqToast({ visible: true, message: "VS Code Diagram added to notes." });
+                setTimeout(() => setHqToast({ visible: false, message: "" }), 3000);
             }
         } catch (error) {
             const msg = error.response?.data?.detail || "Append diagram failed.";
             setDiagramImageError(msg);
         } finally {
-            setDiagramImageLoading(false);
+            setSrsAppending(false);
         }
     };
 
@@ -835,7 +840,7 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
                                                             {msg.imageType === 'diagram' && (
                                                                 <div className="flex gap-2">
                                                                     <button onClick={() => downloadImage(msg.imageUrl, 'studio-diagram.png')} className="px-2 py-1 text-xs rounded border border-[#30363d] text-[#8b949e] hover:text-[#c9d1d9] hover:border-[#c9d1d9] transition">Download Diagram</button>
-                                                                    <button onClick={appendLastDiagramToSrs} className="px-2 py-1 text-xs rounded border border-[#58a6ff] text-[#58a6ff] hover:bg-[#58a6ff]/10 transition">Add to SRS</button>
+                                                                    <button onClick={appendLastDiagramToSrs} disabled={srsAppending} className="px-2 py-1 text-xs rounded border border-[#58a6ff] text-[#58a6ff] hover:bg-[#58a6ff]/10 transition disabled:opacity-50 flex items-center gap-1">{srsAppending ? <RefreshCw size={10} className="animate-spin" /> : <Share2 size={10} />}{srsAppending ? 'Adding...' : 'Add to SRS'}</button>
                                                                 </div>
                                                             )}
                                                             <div className="text-xs text-[#8b949e]">{msg.text}</div>
@@ -869,7 +874,7 @@ const IntegratedNotebook = ({ initialContent, projectId, projectName, currentUse
                                     <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
                                         <button onClick={generateDiagram} disabled={loadingDiagram} className="px-3 py-1.5 bg-[#238636] text-white text-xs font-bold rounded shadow-lg hover:bg-[#2ea043] disabled:opacity-50 flex items-center gap-2">{loadingDiagram ? <div className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin"></div> : <Workflow size={14} />}{loadingDiagram ? 'Generating...' : 'Generate New Diagram'}</button>
                                         <button onClick={handleDownloadDiagramImage} disabled={diagramImageLoading} className="px-3 py-1.5 bg-[#21262d] text-white text-xs font-bold rounded shadow-lg hover:bg-[#30363d] disabled:opacity-50 flex items-center gap-2">{diagramImageLoading ? <div className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin"></div> : <Download size={14} />}Download Image</button>
-                                        <button onClick={handleAppendDiagramToDoc} disabled={diagramImageLoading} className="px-3 py-1.5 bg-[#58a6ff] text-white text-xs font-bold rounded shadow-lg hover:bg-[#4493f8] disabled:opacity-50 flex items-center gap-2">{diagramImageLoading ? <div className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin"></div> : <Share2 size={14} />}Add to SRS</button>
+                                        <button onClick={handleAppendDiagramToDoc} disabled={srsAppending} className="px-3 py-1.5 bg-[#58a6ff] text-white text-xs font-bold rounded shadow-lg hover:bg-[#4493f8] disabled:opacity-50 flex items-center gap-2">{srsAppending ? <div className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin"></div> : <Share2 size={14} />}{srsAppending ? 'Adding...' : 'Add to SRS'}</button>
                                     </div>
                                     {diagramImageError && <div className="absolute top-16 right-4 z-50 text-xs text-[#ff7b72] bg-[#0d1117] border border-[#30363d] rounded px-3 py-2">{diagramImageError}</div>}
                                     {nodes.length === 0 && !loadingDiagram && <div className="absolute inset-0 flex flex-col items-center justify-center text-[#8b949e] z-40 pointer-events-none"><Workflow size={48} className="mb-4 opacity-50" /><p className="text-sm">Click "Generate New Diagram" to visualize your notes.</p></div>}
