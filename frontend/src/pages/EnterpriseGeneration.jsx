@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -22,11 +22,13 @@ const EnterpriseGeneration = () => {
     useTitle('Generating Documentation');
     const location = useLocation();
     const navigate = useNavigate();
-    const { user, token } = useAuth();
-    // Reactive token resolution - useMemo ensures it updates when token changes (fixes Google OAuth race condition)
-    const resolvedToken = useMemo(() => {
+    const { user, token, loading: authLoading } = useAuth();
+
+    // Read token fresh at call time - prevents race condition where AuthContext
+    // hasn't finished async loading when component mounts and generation starts
+    const getToken = useCallback(() => {
         if (token) return token;
-        // Fallback: read directly from cookie in case AuthContext hasn't updated yet
+        // Fallback: read directly from cookie
         const cookieMatch = document.cookie.match(/(?:^|;\s*)token=([^;]*)/);
         if (cookieMatch) return decodeURIComponent(cookieMatch[1]);
         return sessionStorage.getItem('token') || localStorage.getItem('token') || null;
@@ -71,6 +73,8 @@ const EnterpriseGeneration = () => {
 
     const startGeneration = async (mode = 'quick') => {
         if (!formData) return;
+        // Read token fresh at call time (not at render time) to avoid race condition
+        const resolvedToken = getToken();
         if (!resolvedToken) {
             setError("Authentication required. Please login again.");
             setStatus('error');
@@ -205,8 +209,9 @@ const EnterpriseGeneration = () => {
         }
     };
 
-    // Auto-start on mount (only once)
+    // Auto-start on mount - wait for auth to finish loading first (prevents 401 race condition)
     useEffect(() => {
+        if (authLoading) return; // Wait until AuthContext finishes async profile fetch
         if (!formData) return;
         if (!hasStartedRef.current) {
             hasStartedRef.current = true;
@@ -219,7 +224,7 @@ const EnterpriseGeneration = () => {
             if (progressTimerRef.current) clearInterval(progressTimerRef.current);
             progressTimerRef.current = null;
         };
-    }, []);
+    }, [authLoading]); // Re-run when auth finishes loading
 
     // Smooth staged progress while backend works (prevents UI staying at 0%)
     useEffect(() => {
