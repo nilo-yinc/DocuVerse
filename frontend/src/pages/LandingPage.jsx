@@ -145,7 +145,7 @@ const LandingPage = () => {
                                         <div className="w-3 h-3 rounded-full bg-[#ff5f56]"></div>
                                         <div className="w-3 h-3 rounded-full bg-[#ffbd2e]"></div>
                                         <div className="w-3 h-3 rounded-full bg-[#27c93f]"></div>
-                                        <div className="ml-4 text-xs text-[#8b949e]">niloy@dev:~/docuverse</div>
+                                        <div className="ml-4 text-xs text-[#8b949e]">user@dev:~/docuverse</div>
                                     </div>
                                     {/* Terminal Body */}
                                     <div className="p-6 text-[#c9d1d9] space-y-2">
@@ -208,7 +208,7 @@ const LandingPage = () => {
                         {/* Classic Waterfall */}
                         <Card3D className="cursor-pointer" intensity={15}>
                             <Card3DBody
-                                className="bg-[#0d1117] hover:border-[#58a6ff] h-full"
+                                className="bg-[#0d1117] border border-[#30363d] hover:border-[#58a6ff] h-full p-6 rounded-2xl relative"
                                 onClick={() => navigate('/library')}
                             >
                                 <div className="absolute top-0 right-0 p-20 bg-[#58a6ff]/5 blur-[60px] rounded-full"></div>
@@ -233,7 +233,7 @@ const LandingPage = () => {
                         {/* V-Shaped Model */}
                         <Card3D className="cursor-pointer" intensity={15}>
                             <Card3DBody
-                                className="bg-[#0d1117] hover:border-[#2ea043] h-full"
+                                className="bg-[#0d1117] border border-[#30363d] hover:border-[#2ea043] h-full p-6 rounded-2xl relative"
                                 onClick={() => navigate('/library')}
                             >
                                 <div className="absolute top-0 right-0 p-20 bg-[#2ea043]/5 blur-[60px] rounded-full"></div>
@@ -258,7 +258,7 @@ const LandingPage = () => {
                         {/* Spiral Model */}
                         <Card3D className="cursor-pointer" intensity={15}>
                             <Card3DBody
-                                className="bg-[#0d1117] hover:border-[#d29922] h-full"
+                                className="bg-[#0d1117] border border-[#30363d] hover:border-[#d29922] h-full p-6 rounded-2xl relative"
                                 onClick={() => navigate('/library')}
                             >
                                 <div className="absolute top-0 right-0 p-20 bg-[#d29922]/5 blur-[60px] rounded-full"></div>
