@@ -1,3 +1,4 @@
+// v2.1 - auth race condition fix
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -269,9 +270,11 @@ const EnterpriseGeneration = () => {
     };
 
     useEffect(() => {
-        if (!studioProjectId || hqStatus !== 'processing' || !resolvedToken) return;
+        if (!studioProjectId || hqStatus !== 'processing') return;
 
         const pollHq = async () => {
+            const resolvedToken = getToken();
+            if (!resolvedToken) return;
             try {
                 const res = await fetch(`${nodeApiBase}/api/projects/${studioProjectId}/hq-status`, {
                     headers: { Authorization: `Bearer ${resolvedToken}` }
@@ -302,7 +305,7 @@ const EnterpriseGeneration = () => {
         pollHq();
         const interval = setInterval(pollHq, 15000);
         return () => clearInterval(interval);
-    }, [studioProjectId, hqStatus, resolvedToken, nodeApiBase]);
+    }, [studioProjectId, hqStatus, nodeApiBase, getToken]);
 
     // --- Circular Physics ---
     const radius = 60;
