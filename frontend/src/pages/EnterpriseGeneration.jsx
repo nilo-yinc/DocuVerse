@@ -23,14 +23,21 @@ const EnterpriseGeneration = () => {
     const location = useLocation();
     const navigate = useNavigate();
     const { user, token } = useAuth();
-    const resolvedToken = token || sessionStorage.getItem('token') || localStorage.getItem('token');
+    // Reactive token resolution - useMemo ensures it updates when token changes (fixes Google OAuth race condition)
+    const resolvedToken = useMemo(() => {
+        if (token) return token;
+        // Fallback: read directly from cookie in case AuthContext hasn't updated yet
+        const cookieMatch = document.cookie.match(/(?:^|;\s*)token=([^;]*)/);
+        if (cookieMatch) return decodeURIComponent(cookieMatch[1]);
+        return sessionStorage.getItem('token') || localStorage.getItem('token') || null;
+    }, [token]);
     const formData = location.state?.formData;
     const params = new URLSearchParams(location.search);
     const queryUpdate = params.get('update') === '1';
     const queryProjectId = params.get('projectId');
     const isUpdateFlow = Boolean(queryUpdate || location.state?.update || location.state?.projectId || formData?.projectId || queryProjectId);
     const existingProjectId = isUpdateFlow
-        ? (location.state?.projectId || formData?.projectId || queryProjectId || localStorage.getItem('autoSRS_activeProjectId') || null)
+        ? (location.state?.projectId || formData?.projectId || queryProjectId || localStorage.getItem('docuverse_activeProjectId') || null)
         : null;
     const nodeApiBase = useMemo(
         () => normalizeApiBase(import.meta.env.VITE_NODE_API_URL, defaultNodeBase()),
@@ -100,7 +107,7 @@ const EnterpriseGeneration = () => {
             // Robust ID Resolution: Check existing sources, then fallback to localStorage
             let finalProjectId = isUpdateFlow ? (existingProjectId || undefined) : undefined;
             if (!finalProjectId) {
-                const storedId = localStorage.getItem('autoSRS_activeProjectId');
+                const storedId = localStorage.getItem('docuverse_activeProjectId');
                 if (storedId && storedId !== 'null' && storedId !== 'undefined') {
                     console.warn("Generation: Recovered missing Project ID from storage:", storedId);
                     finalProjectId = storedId;
@@ -159,7 +166,7 @@ const EnterpriseGeneration = () => {
                     setHqResult({ download_url: data.srs_document_path });
                 }
                 if (data.projectId) {
-                    localStorage.setItem('autoSRS_activeProjectId', data.projectId);
+                    localStorage.setItem('docuverse_activeProjectId', data.projectId);
                 }
             } else {
                 setHqResult({ download_url: data.srs_document_path });
@@ -168,7 +175,7 @@ const EnterpriseGeneration = () => {
                 setHqMessage("High Quality SRS Complete!");
                 setStudioProjectId(data.projectId);
                 if (data.projectId) {
-                    localStorage.setItem('autoSRS_activeProjectId', data.projectId);
+                    localStorage.setItem('docuverse_activeProjectId', data.projectId);
                     // Automatically navigate to studio after short delay
                     setTimeout(() => navigate(`/studio/${data.projectId}`), 1500);
                 }
@@ -181,7 +188,7 @@ const EnterpriseGeneration = () => {
                 // Special Handling: If Project Not Found, clear stale ID and retry as NEW project
                 if (err.message.includes("Project not found") || err.message.includes("404")) {
                     console.warn("Generation: Stale Project ID detected. Clearing storage and retrying as new project...");
-                    localStorage.removeItem('autoSRS_activeProjectId');
+                    localStorage.removeItem('docuverse_activeProjectId');
                     // Small delay before retry
                     setTimeout(() => startGeneration(mode), 1000);
                     return;

@@ -195,7 +195,7 @@ const EnterpriseSRS = () => {
                 }
             } else {
                 // 2. Try Local Storage if not an update flow
-                const savedData = localStorage.getItem('autoSRS_enterpriseForm');
+                const savedData = localStorage.getItem('docuverse_enterpriseForm');
                 if (savedData) {
                     try {
                         const parsed = JSON.parse(savedData);
@@ -226,7 +226,7 @@ const EnterpriseSRS = () => {
     useEffect(() => {
         if (isLoaded && !projectId) {
             const payload = { formData, step };
-            localStorage.setItem('autoSRS_enterpriseForm', JSON.stringify(payload));
+            localStorage.setItem('docuverse_enterpriseForm', JSON.stringify(payload));
         }
     }, [formData, step, isLoaded, projectId]);
 
@@ -279,7 +279,7 @@ const EnterpriseSRS = () => {
 
     const handleClearForm = () => {
         if (window.confirm("Are you sure you want to clear the form? This will reset all fields.")) {
-            localStorage.removeItem('autoSRS_enterpriseForm');
+            localStorage.removeItem('docuverse_enterpriseForm');
             window.location.href = '/enterprise/form'; // Redirect to fresh form
         }
     };

@@ -119,7 +119,7 @@ export const AuthProvider = ({ children }) => {
     const logout = () => {
         deleteCookie(STORAGE_KEY);
         sessionStorage.removeItem(STORAGE_KEY);
-        localStorage.removeItem('autoSRS_enterpriseForm'); // Clear saved form data
+        localStorage.removeItem('docuverse_enterpriseForm'); // Clear saved form data
         setToken(null);
         setUser(null);
         delete api.defaults.headers.common['Authorization'];

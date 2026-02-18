@@ -161,7 +161,7 @@ const Dashboard = () => {
                         <div className="space-y-2">
                             <button
                                 onClick={() => {
-                                    localStorage.removeItem('autoSRS_enterpriseForm');
+                                    localStorage.removeItem('docuverse_enterpriseForm');
                                     navigate('/enterprise/form?new=1', { state: { resetForm: true } });
                                 }}
                                 className="w-full flex items-center gap-3 p-3 rounded-lg bg-[#238636] hover:bg-[#2ea043] text-white text-sm font-bold transition shadow-lg shadow-green-900/10 group"
@@ -248,7 +248,7 @@ const Dashboard = () => {
                                         </p>
                                         <button
                                             onClick={() => {
-                                                localStorage.removeItem('autoSRS_enterpriseForm');
+                                                localStorage.removeItem('docuverse_enterpriseForm');
                                                 navigate('/enterprise/form?new=1', { state: { resetForm: true } });
                                             }}
                                             className="w-full py-3 bg-[#1f6feb] text-white rounded-lg font-bold hover:bg-[#388bfd] transition shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2"
