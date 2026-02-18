@@ -10,16 +10,18 @@
 
 @layer base {
   html {
-    height: 100%;
+    width: 100%;
     overflow-x: hidden;
-    /* Removed scrollbar-gutter to prevent white bar gap */
+    /* Prevent layout shift when scrollbar appears */
+    margin-right: calc(-1 * (100vw - 100%));
   }
 
   body {
-    min-height: 100%;
+    width: 100%;
+    min-height: 100vh;
     overflow-x: hidden;
-    /* Removed forced vertical scroll to prevent always-on scrollbar */
-    @apply bg-[#0d1117]; /* Hardcode dark bg to be safe */
+    position: relative;
+    @apply bg-[#0d1117];
   }
 
   /* Custom Dark Scrollbar */
@@ -29,16 +31,16 @@
   }
 
   ::-webkit-scrollbar-track {
-    background: #0d1117; 
+    background: #0d1117;
   }
 
   ::-webkit-scrollbar-thumb {
-    background: #30363d; 
+    background: #30363d;
     border-radius: 4px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: #58a6ff; 
+    background: #58a6ff;
   }
 }
 
@@ -50,14 +52,23 @@
   box-shadow: 0 0 15px rgba(188, 19, 254, 0.5);
 }
 
-html, body {
+html,
+body {
   scroll-behavior: auto !important;
 }
 
 @keyframes gradient-move {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
 }
 
 .animate-gradient {
