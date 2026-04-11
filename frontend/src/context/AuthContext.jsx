@@ -3,6 +3,12 @@ import api from '../api/client';
 
 const AuthContext = createContext();
 const STORAGE_KEY = 'token';
+const isValidStoredToken = (value) => {
+    if (!value || typeof value !== 'string') return false;
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === 'undefined' || trimmed === 'null') return false;
+    return trimmed.split('.').length === 3;
+};
 
 // Cookie Helper Functions
 const setCookie = (name, value, days) => {
@@ -38,22 +44,25 @@ export const AuthProvider = ({ children }) => {
     const [token, setToken] = useState(() => {
         // 1. Check Cookie (Primary for 24h persistence)
         const cookieToken = getCookie(STORAGE_KEY);
-        if (cookieToken) return cookieToken;
+        if (isValidStoredToken(cookieToken)) return cookieToken;
 
         // 2. Fallback to sessionStorage (Legacy session-based)
         const sessionToken = sessionStorage.getItem(STORAGE_KEY);
-        if (sessionToken) {
+        if (isValidStoredToken(sessionToken)) {
             setCookie(STORAGE_KEY, sessionToken, 1); // Migrate to cookie
             return sessionToken;
         }
 
         // 3. Fallback to localStorage (Legacy legacy)
         const legacyToken = localStorage.getItem('token');
-        if (legacyToken) {
+        if (isValidStoredToken(legacyToken)) {
             setCookie(STORAGE_KEY, legacyToken, 1);
             localStorage.removeItem('token');
             return legacyToken;
         }
+        // Clear poisoned values
+        sessionStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem('token');
         return null;
     });
     const [loading, setLoading] = useState(true);
@@ -61,7 +70,7 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         // Initial check
         const initjs = async () => {
-            if (token) {
+            if (token && isValidStoredToken(token)) {
                 api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
                 try {
                     const res = await api.get('/users/get-profile');
@@ -73,6 +82,7 @@ export const AuthProvider = ({ children }) => {
                     if (err.response?.status === 401 || err.response?.status === 400) {
                         deleteCookie(STORAGE_KEY);
                         sessionStorage.removeItem(STORAGE_KEY);
+                        localStorage.removeItem('token');
                         setToken(null);
                         setUser(null);
                         delete api.defaults.headers.common['Authorization'];
@@ -81,6 +91,9 @@ export const AuthProvider = ({ children }) => {
             } else {
                 delete api.defaults.headers.common['Authorization'];
                 setUser(null);
+                deleteCookie(STORAGE_KEY);
+                sessionStorage.removeItem(STORAGE_KEY);
+                localStorage.removeItem('token');
             }
             setLoading(false);
         };
@@ -94,6 +107,8 @@ export const AuthProvider = ({ children }) => {
                 return { success: false, msg: res.data?.message || "Login failed. Check credentials." };
             }
             setCookie(STORAGE_KEY, res.data.token, 1); // Persist for 1 day (24h)
+            sessionStorage.setItem(STORAGE_KEY, res.data.token);
+            localStorage.setItem('token', res.data.token);
             setToken(res.data.token);
             setUser(res.data.user);
             return { success: true };
@@ -119,6 +134,7 @@ export const AuthProvider = ({ children }) => {
     const logout = () => {
         deleteCookie(STORAGE_KEY);
         sessionStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem('token');
         localStorage.removeItem('docuverse_enterpriseForm'); // Clear saved form data
         setToken(null);
         setUser(null);
@@ -162,8 +178,10 @@ export const AuthProvider = ({ children }) => {
     };
 
     const handleGoogleCallback = useCallback(({ token: googleToken, user: googleUser }) => {
-        if (googleToken) {
+        if (isValidStoredToken(googleToken)) {
             setCookie(STORAGE_KEY, googleToken, 1);
+            sessionStorage.setItem(STORAGE_KEY, googleToken);
+            localStorage.setItem('token', googleToken);
             setToken(googleToken);
             setUser(googleUser);
             api.defaults.headers.common['Authorization'] = `Bearer ${googleToken}`;

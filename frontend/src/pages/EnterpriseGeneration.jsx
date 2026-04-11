@@ -27,12 +27,28 @@ const EnterpriseGeneration = () => {
 
     // Read token fresh at call time - prevents race condition where AuthContext
     // hasn't finished async loading when component mounts and generation starts
+    const isLikelyJwt = (value) => {
+        if (!value || typeof value !== 'string') return false;
+        const trimmed = value.trim();
+        if (!trimmed || trimmed === 'undefined' || trimmed === 'null') return false;
+        return trimmed.split('.').length === 3;
+    };
+
     const getToken = useCallback(() => {
-        if (token) return token;
-        // Fallback: read directly from cookie
-        const cookieMatch = document.cookie.match(/(?:^|;\s*)token=([^;]*)/);
-        if (cookieMatch) return decodeURIComponent(cookieMatch[1]);
-        return sessionStorage.getItem('token') || localStorage.getItem('token') || null;
+        if (isLikelyJwt(token)) return token;
+
+        // Fallback 1: cookie token set by AuthContext
+        const cookieToken = document.cookie.match(/(?:^|;\s*)token=([^;]*)/);
+        if (cookieToken && isLikelyJwt(decodeURIComponent(cookieToken[1]))) {
+            return decodeURIComponent(cookieToken[1]);
+        }
+
+        // Fallback 2: legacy storages
+        const sessionToken = sessionStorage.getItem('token');
+        if (isLikelyJwt(sessionToken)) return sessionToken;
+        const localToken = localStorage.getItem('token');
+        if (isLikelyJwt(localToken)) return localToken;
+        return null;
     }, [token]);
     const formData = location.state?.formData;
     const params = new URLSearchParams(location.search);
@@ -125,6 +141,7 @@ const EnterpriseGeneration = () => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${resolvedToken}`
                 },
+                credentials: 'include',
                 body: JSON.stringify({
                     projectId: finalProjectId,
                     mode: mode,
@@ -143,6 +160,9 @@ const EnterpriseGeneration = () => {
                 data = null;
             }
             if (!response.ok) {
+                if (response.status === 401) {
+                    throw new Error("Session expired or invalid. Please sign in again.");
+                }
                 const detailText = typeof data?.details === 'string'
                     ? data.details
                     : (data?.details ? JSON.stringify(data.details) : '');
@@ -197,6 +217,12 @@ const EnterpriseGeneration = () => {
                     // Small delay before retry
                     setTimeout(() => startGeneration(mode), 1000);
                     return;
+                }
+                if (err.message.includes("Session expired") || err.message.includes("Please sign in again")) {
+                    localStorage.removeItem('token');
+                    sessionStorage.removeItem('token');
+                    document.cookie = "token=; Max-Age=0; path=/";
+                    setTimeout(() => navigate('/enterprise/access'), 600);
                 }
 
                 setError(err.message);
@@ -277,7 +303,8 @@ const EnterpriseGeneration = () => {
             if (!resolvedToken) return;
             try {
                 const res = await fetch(`${nodeApiBase}/api/projects/${studioProjectId}/hq-status`, {
-                    headers: { Authorization: `Bearer ${resolvedToken}` }
+                    headers: { Authorization: `Bearer ${resolvedToken}` },
+                    credentials: 'include'
                 });
                 if (!res.ok) return;
                 const data = await res.json();
