@@ -53,7 +53,7 @@ const EnterpriseAccess = () => {
     }, []);
 
     const handleGoogleLogin = () => {
-        sessionStorage.setItem('oauth_redirect_target', '/enterprise/form');
+        sessionStorage.setItem('oauth_redirect_target', window.location.pathname);
         const authBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1';
         const fullUrl = authBaseUrl.startsWith('http') ? authBaseUrl : `${window.location.origin}${authBaseUrl}`;
         window.location.href = `${fullUrl}/users/google/login`;

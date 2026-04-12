@@ -83,7 +83,7 @@ const Login = () => {
     };
 
     const handleGoogleLogin = () => {
-        sessionStorage.setItem('oauth_redirect_target', '/dashboard');
+        sessionStorage.setItem('oauth_redirect_target', window.location.pathname);
         const authBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1';
         const fullUrl = authBaseUrl.startsWith('http')
             ? authBaseUrl
