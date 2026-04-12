@@ -2,43 +2,53 @@ const jwt = require("jsonwebtoken");
 
 const isLoggedIn = (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization || "";
-    const headerToken = authHeader.startsWith("Bearer ")
-      ? authHeader.substring(7).trim()
-      : null;
-    const cookieToken = req.cookies?.jwtToken ? String(req.cookies.jwtToken).trim() : null;
+    // 1. extract token from cookies or Authorization header
+    let token = req.cookies.jwtToken;
+    
+    // Fallback to Authorization header if cookie is not present (for cross-origin requests)
+    if (!token && req.headers.authorization) {
+      const authHeader = req.headers.authorization;
+      if (authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7);
+      }
+    }
 
-    // Prefer bearer token first (latest frontend token), then cookie fallback.
-    const tokenCandidates = [headerToken, cookieToken].filter(Boolean);
-    if (tokenCandidates.length === 0) {
+    // 2. check if token exists
+    if (!token) {
       return res.status(401).json({
         status: false,
         message: "Unauthorized access - No token provided",
       });
     }
 
-    for (const token of tokenCandidates) {
-      try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        if (decoded) {
-          req.user = decoded;
-          return next();
-        }
-      } catch (_) {
-        // Try next token candidate
-      }
+    // 3. verify the token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // 4. check if user exists
+    if (!decoded) {
+      return res.status(401).json({
+        status: false,
+        message: "Unauthorized access",
+      });
     }
 
-    return res.status(401).json({
-      status: false,
-      message: "Unauthorized access - Invalid or expired token",
-    });
+    // 5. pass the user data to the next middleware
+    req.user = decoded;
+    next();
   } catch (error) {
     console.error("Error verifying token:", error.message);
+    
+    // Handle specific JWT errors as 401
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        status: false,
+        message: "Unauthorized access - Invalid or expired token",
+      });
+    }
 
-    return res.status(401).json({
+    return res.status(500).json({
       status: false,
-      message: "Unauthorized access",
+      message: "Internal server error during authentication",
     });
   }
 };

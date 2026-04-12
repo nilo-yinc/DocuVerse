@@ -61,29 +61,8 @@ class AppErrorBoundary extends React.Component {
 
 const PrivateRoute = ({ children, redirectTo = "/dashboard" }) => {
   const { token, loading } = useAuth();
-
-  const isLikelyJwt = (value) => {
-    if (!value || typeof value !== 'string') return false;
-    const trimmed = value.trim();
-    return Boolean(trimmed) && trimmed !== 'undefined' && trimmed !== 'null' && trimmed.split('.').length === 3;
-  };
-
-  const getCookieToken = () => {
-    const match = document.cookie.match(/(?:^|;\s*)token=([^;]+)/);
-    return match ? decodeURIComponent(match[1]) : null;
-  };
-
-  const persistedToken =
-    token ||
-    getCookieToken() ||
-    sessionStorage.getItem('token') ||
-    localStorage.getItem('token');
-
-  if (loading) {
-    return <div className="min-h-screen bg-dark-bg text-white flex items-center justify-center"><div>Loading...</div></div>;
-  }
-
-  return isLikelyJwt(persistedToken) ? children : <Navigate to={redirectTo} replace />;
+  if (loading) return <div className="min-h-screen bg-dark-bg text-white flex items-center justify-center"><div>Loading...</div></div>;
+  return token ? children : <Navigate to={redirectTo} />;
 };
 
 function App() {

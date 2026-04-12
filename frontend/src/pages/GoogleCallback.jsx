@@ -12,13 +12,12 @@ const GoogleCallback = () => {
         // Prevent re-processing on re-renders
         if (processed.current) return;
 
-        const token = (searchParams.get('token') || '').trim();
+        const token = searchParams.get('token');
         const name = searchParams.get('name');
         const email = searchParams.get('email');
         const id = searchParams.get('id');
-        const isLikelyJwt = token.split('.').length === 3;
 
-        if (token && isLikelyJwt) {
+        if (token) {
             processed.current = true;
             handleGoogleCallback({ token, user: { id, name, email } });
 
@@ -26,14 +25,15 @@ const GoogleCallback = () => {
             const target = sessionStorage.getItem('oauth_redirect_target') || '/dashboard';
             sessionStorage.removeItem('oauth_redirect_target');
 
-            // SPA navigation avoids a full reload race where auth state is still settling.
-            navigate(target, { replace: true });
+            setTimeout(() => {
+                window.location.href = target;
+            }, 300);
         } else {
             processed.current = true;
-            navigate('/login?error=google_auth_failed', { replace: true });
+            window.location.href = '/login?error=google_auth_failed';
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchParams, handleGoogleCallback, navigate]);
+    }, []); // Run once on mount only
 
     return (
         <div className="flex justify-center items-center h-screen bg-dark-bg">
