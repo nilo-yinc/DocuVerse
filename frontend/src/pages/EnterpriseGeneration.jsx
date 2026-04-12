@@ -25,14 +25,34 @@ const EnterpriseGeneration = () => {
     const navigate = useNavigate();
     const { user, token, loading: authLoading } = useAuth();
 
+    const isLikelyJwt = (value) => {
+        if (!value || typeof value !== 'string') return false;
+        const trimmed = value.trim();
+        return Boolean(trimmed) && trimmed !== 'undefined' && trimmed !== 'null' && trimmed.split('.').length === 3;
+    };
+
+    const sanitizeProjectId = (value) => {
+        const raw = String(value || '').trim();
+        if (!raw || raw === 'null' || raw === 'undefined') return null;
+        return raw;
+    };
+
     // Read token fresh at call time - prevents race condition where AuthContext
     // hasn't finished async loading when component mounts and generation starts
     const getToken = useCallback(() => {
-        if (token) return token;
+        if (isLikelyJwt(token)) return token;
         // Fallback: read directly from cookie
         const cookieMatch = document.cookie.match(/(?:^|;\s*)token=([^;]*)/);
-        if (cookieMatch) return decodeURIComponent(cookieMatch[1]);
-        return sessionStorage.getItem('token') || localStorage.getItem('token') || null;
+        const cookieToken = cookieMatch ? decodeURIComponent(cookieMatch[1]) : null;
+        if (isLikelyJwt(cookieToken)) return cookieToken;
+
+        const sessionToken = sessionStorage.getItem('token');
+        if (isLikelyJwt(sessionToken)) return sessionToken;
+
+        const localToken = localStorage.getItem('token');
+        if (isLikelyJwt(localToken)) return localToken;
+
+        return null;
     }, [token]);
     const formData = location.state?.formData;
     const params = new URLSearchParams(location.search);
@@ -40,7 +60,7 @@ const EnterpriseGeneration = () => {
     const queryProjectId = params.get('projectId');
     const isUpdateFlow = Boolean(queryUpdate || location.state?.update || location.state?.projectId || formData?.projectId || queryProjectId);
     const existingProjectId = isUpdateFlow
-        ? (location.state?.projectId || formData?.projectId || queryProjectId || localStorage.getItem('docuverse_activeProjectId') || null)
+        ? sanitizeProjectId(location.state?.projectId || formData?.projectId || queryProjectId || localStorage.getItem('docuverse_activeProjectId'))
         : null;
     const nodeApiBase = useMemo(
         () => normalizeApiBase(import.meta.env.VITE_NODE_API_URL, defaultNodeBase()),
@@ -72,7 +92,8 @@ const EnterpriseGeneration = () => {
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
-    const startGeneration = async (mode = 'quick') => {
+    const startGeneration = async (mode = 'quick', options = {}) => {
+        const { forceNewProject = false } = options;
         if (!formData) return;
         // Read token fresh at call time (not at render time) to avoid race condition
         const resolvedToken = getToken();
@@ -109,15 +130,9 @@ const EnterpriseGeneration = () => {
                 delete sanitizedFormData.projectId;
             }
 
-            // Robust ID Resolution: Check existing sources, then fallback to localStorage
-            let finalProjectId = isUpdateFlow ? (existingProjectId || undefined) : undefined;
-            if (!finalProjectId) {
-                const storedId = localStorage.getItem('docuverse_activeProjectId');
-                if (storedId && storedId !== 'null' && storedId !== 'undefined') {
-                    console.warn("Generation: Recovered missing Project ID from storage:", storedId);
-                    finalProjectId = storedId;
-                }
-            }
+            // Only send projectId in update flow.
+            // In create flow, stale localStorage IDs can cause "Not authorized".
+            const finalProjectId = (!forceNewProject && isUpdateFlow) ? existingProjectId || undefined : undefined;
 
             const response = await fetch(genUrl, {
                 method: 'POST',
@@ -125,6 +140,7 @@ const EnterpriseGeneration = () => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${resolvedToken}`
                 },
+                credentials: 'include',
                 body: JSON.stringify({
                     projectId: finalProjectId,
                     mode: mode,
@@ -151,7 +167,10 @@ const EnterpriseGeneration = () => {
                 const errMessage = htmlLike
                     ? "Backend returned HTML instead of API JSON. Check VITE_NODE_API_URL and Render service URL."
                     : String(combined).slice(0, 400);
-                throw new Error(errMessage);
+                const taggedError = new Error(errMessage);
+                taggedError.status = response.status;
+                taggedError.usedProjectId = finalProjectId || null;
+                throw taggedError;
             }
 
             if (mode === 'quick' || mode === 'instant') {
@@ -195,7 +214,16 @@ const EnterpriseGeneration = () => {
                     console.warn("Generation: Stale Project ID detected. Clearing storage and retrying as new project...");
                     localStorage.removeItem('docuverse_activeProjectId');
                     // Small delay before retry
-                    setTimeout(() => startGeneration(mode), 1000);
+                    setTimeout(() => startGeneration(mode, { forceNewProject: true }), 1000);
+                    return;
+                }
+
+                // If an old projectId points to another user's project, backend returns "Not authorized".
+                // Self-heal by clearing stale active ID and retrying without projectId.
+                if ((err.status === 401 || /not authorized/i.test(err.message)) && err.usedProjectId) {
+                    console.warn("Generation: Unauthorized stale project reference. Retrying as new project...");
+                    localStorage.removeItem('docuverse_activeProjectId');
+                    setTimeout(() => startGeneration(mode, { forceNewProject: true }), 600);
                     return;
                 }
 
