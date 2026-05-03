@@ -1,5 +1,5 @@
 @echo off
-REM AutoSRS Quick Start Script for Windows
+REM DocuVerse Quick Start Script for Windows
 
 echo ========================================
 echo DocuVerse Quick Start
