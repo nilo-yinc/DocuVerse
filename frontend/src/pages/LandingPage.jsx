@@ -60,9 +60,9 @@ const LandingPage = () => {
     const fullText = "Writes Itself.";
 
     const handleViewSample = () => {
-        // Open the sample report from dedicated backend route
+        // Open the sample report from dynamic backend route
         const backendUrl = normalizeApiBase(import.meta.env.VITE_NODE_API_URL, defaultNodeBase());
-        window.open(`${backendUrl}/api/sample-report`, '_blank');
+        window.open(`${backendUrl}/download_srs/sample_report.docx`, '_blank');
     };
 
     const ScrollSection = ({ children, className = "" }) => (
