@@ -2,7 +2,7 @@
 REM AutoSRS Quick Start Script for Windows
 
 echo ========================================
-echo AutoSRS Quick Start
+echo DocuVerse Quick Start
 echo ========================================
 echo.
 
