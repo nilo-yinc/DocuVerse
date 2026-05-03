@@ -6,9 +6,9 @@ Built with FastAPI, Google ADK, and LiteLLM.
 """
 
 __version__ = "1.1.0"
-__author__ = "Your Name"
-__license__ = "Proprietary"
-__description__ = "AI-powered SRS document generator"
+__author__ = "nilo-yinc"
+__license__ = "MIT"
+__description__ = "Technical documentation generation engine"
 
 from .main import app
 
