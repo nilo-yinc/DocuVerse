@@ -2,7 +2,7 @@
 # DocuVerse Quick Start Script for Linux/macOS
 
 echo "========================================"
-echo "AutoSRS Quick Start"
+echo "DocuVerse Quick Start"
 echo "========================================"
 echo ""
 
