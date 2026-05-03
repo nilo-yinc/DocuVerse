@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../api/client';
-import { Eye, EyeOff, CheckCircle, ArrowLeft, Mail, KeyRound } from 'lucide-react';
+import { Eye, EyeOff, CheckCircle, ArrowLeft, Mail, KeyRound, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import useTitle from '../hooks/useTitle';
 
@@ -409,7 +409,9 @@ const EnterpriseAccess = () => {
                                             disabled={loading}
                                             className="w-full py-3.5 px-4 bg-[#161b22] hover:bg-[#1c2128] text-[#8b949e] hover:text-[#c9d1d9] font-bold rounded-xl border border-white/5 transition-all flex items-center justify-center gap-2 text-[10px] uppercase tracking-[0.2em] group/guest active:scale-95 disabled:opacity-50"
                                         >
-                                            <span className="w-5 h-5 rounded-full bg-[#58a6ff]/10 flex items-center justify-center group-hover/guest:bg-[#58a6ff]/20 transition-colors">✨</span>
+                                            <span className="w-5 h-5 rounded-full bg-[#58a6ff]/10 flex items-center justify-center group-hover/guest:bg-[#58a6ff]/20 transition-colors">
+                                                <User size={12} className="text-[#58a6ff]" />
+                                            </span>
                                             Continue as Guest
                                         </button>
                                     )}

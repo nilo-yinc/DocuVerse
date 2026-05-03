@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../api/client';
-import { Eye, EyeOff, CheckCircle, GraduationCap, ArrowLeft, KeyRound } from 'lucide-react';
+import { Eye, EyeOff, CheckCircle, GraduationCap, ArrowLeft, KeyRound, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import useTitle from '../hooks/useTitle';
 
@@ -353,7 +353,9 @@ const StudentAccess = () => {
                                             disabled={loading}
                                             className="w-full py-3.5 px-4 bg-[#161b22] hover:bg-pink-900/10 text-gray-500 hover:text-pink-300 font-bold rounded-xl border border-white/5 transition-all flex items-center justify-center gap-2 text-[10px] uppercase tracking-[0.2em] group/guest active:scale-95 disabled:opacity-50"
                                         >
-                                            <span className="w-5 h-5 rounded-full bg-pink-500/10 flex items-center justify-center group-hover/guest:bg-pink-500/20 transition-colors">🎓</span>
+                                            <span className="w-5 h-5 rounded-full bg-pink-500/10 flex items-center justify-center group-hover/guest:bg-pink-500/20 transition-colors">
+                                                <User size={12} className="text-pink-400" />
+                                            </span>
                                             Continue as Guest
                                         </button>
                                     )}
