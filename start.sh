@@ -1,5 +1,5 @@
 #!/bin/bash
-# AutoSRS Quick Start Script for Linux/macOS
+# DocuVerse Quick Start Script for Linux/macOS
 
 echo "========================================"
 echo "AutoSRS Quick Start"
