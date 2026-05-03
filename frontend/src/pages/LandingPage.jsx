@@ -116,9 +116,13 @@ const LandingPage = () => {
                                 <Code size={18} /> Initialize Project
                             </button>
                         </NoiseBackground>
-                        <button onClick={handleViewSample} className="px-6 py-3 bg-[#21262d] text-[#c9d1d9] border border-[#30363d] rounded-lg font-medium hover:bg-[#30363d] transition flex items-center gap-2">
+                        <a 
+                            href="/sample_report.docx"
+                            download="sample_report.docx"
+                            className="px-6 py-3 bg-[#21262d] text-[#c9d1d9] border border-[#30363d] rounded-lg font-medium hover:bg-[#30363d] transition flex items-center gap-2"
+                        >
                             <FileText size={18} /> cat sample_report.docx
-                        </button>
+                        </a>
                     </div>
                 </div>
 
