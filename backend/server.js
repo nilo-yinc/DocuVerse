@@ -64,6 +64,21 @@ app.get('/download_srs/:filename', async (req, res) => {
     }
 });
 
+// Dedicated route for the sample report to ensure it always works regardless of DB state
+app.get('/api/sample-report', (req, res) => {
+    const samplePath = path.join(__dirname, 'sample_report.docx');
+    res.download(samplePath, 'sample_report.docx', (err) => {
+        if (err) {
+            console.error('Sample download error:', err);
+            // Fallback to the beta/static folder if root file missing
+            const fallbackPath = path.join(__dirname, 'beta/static/sample_report.docx');
+            res.download(fallbackPath, 'sample_report.docx', (err2) => {
+                if (err2) res.status(404).send('Sample report not found');
+            });
+        }
+    });
+});
+
 // Routes
 app.use('/api/v1/users', require('./routes/user.routes'));
 app.use('/api/projects', require('./routes/projects'));
