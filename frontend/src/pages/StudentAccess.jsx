@@ -57,6 +57,28 @@ const StudentAccess = () => {
         window.location.href = `${fullUrl}/users/google/login`;
     };
 
+    const handleGuestLogin = async () => {
+        setError('');
+        setSuccessMsg('');
+        setLoading(true);
+        try {
+            // Using the requested guest credentials
+            const res = await contextLogin('knowsphere.pr@gmail.com', '12345678');
+            if (res.success) {
+                setSuccessMsg("Guest Lab Access Granted");
+                setTimeout(() => {
+                    navigate('/student/coming-soon');
+                }, 1500);
+            } else {
+                setError(res.msg || 'Guest login failed');
+            }
+        } catch (err) {
+            setError("Guest authentication failed.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
@@ -323,6 +345,18 @@ const StudentAccess = () => {
                                         </span>
                                         <span className="text-sm font-semibold">{isLogin ? 'Sign in with Google' : 'Sign up with Google'}</span>
                                     </button>
+
+                                    {isLogin && (
+                                        <button
+                                            type="button"
+                                            onClick={handleGuestLogin}
+                                            disabled={loading}
+                                            className="w-full py-3.5 px-4 bg-[#161b22] hover:bg-pink-900/10 text-gray-500 hover:text-pink-300 font-bold rounded-xl border border-white/5 transition-all flex items-center justify-center gap-2 text-[10px] uppercase tracking-[0.2em] group/guest active:scale-95 disabled:opacity-50"
+                                        >
+                                            <span className="w-5 h-5 rounded-full bg-pink-500/10 flex items-center justify-center group-hover/guest:bg-pink-500/20 transition-colors">🎓</span>
+                                            Continue as Guest
+                                        </button>
+                                    )}
 
                                     <div className="text-center pt-2">
                                         <span className="text-gray-500 text-[10px] font-medium uppercase tracking-wider">{isLogin ? "Need an account? " : "Already have credentials? "}</span>

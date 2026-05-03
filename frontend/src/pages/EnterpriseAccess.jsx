@@ -59,6 +59,28 @@ const EnterpriseAccess = () => {
         window.location.href = `${fullUrl}/users/google/login`;
     };
 
+    const handleGuestLogin = async () => {
+        setError('');
+        setSuccessMsg('');
+        setLoading(true);
+        try {
+            // Using the requested guest credentials
+            const res = await contextLogin('knowsphere.pr@gmail.com', '12345678');
+            if (res.success) {
+                setSuccessMsg("Guest Access Granted Successfully");
+                setTimeout(() => {
+                    navigate('/enterprise/form');
+                }, 1500);
+            } else {
+                setError(res.msg || 'Guest login failed');
+            }
+        } catch (err) {
+            setError("Guest authentication failed.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
@@ -379,6 +401,18 @@ const EnterpriseAccess = () => {
                                         </span>
                                         <span className="text-sm font-semibold">{isLogin ? 'Sign in with Google' : 'Sign up with Google'}</span>
                                     </button>
+
+                                    {isLogin && (
+                                        <button
+                                            type="button"
+                                            onClick={handleGuestLogin}
+                                            disabled={loading}
+                                            className="w-full py-3.5 px-4 bg-[#161b22] hover:bg-[#1c2128] text-[#8b949e] hover:text-[#c9d1d9] font-bold rounded-xl border border-white/5 transition-all flex items-center justify-center gap-2 text-[10px] uppercase tracking-[0.2em] group/guest active:scale-95 disabled:opacity-50"
+                                        >
+                                            <span className="w-5 h-5 rounded-full bg-[#58a6ff]/10 flex items-center justify-center group-hover/guest:bg-[#58a6ff]/20 transition-colors">✨</span>
+                                            Continue as Guest
+                                        </button>
+                                    )}
 
                                     <div className="text-center pt-2">
                                         <span className="text-[#8b949e] text-[10px] font-medium uppercase tracking-wider">
